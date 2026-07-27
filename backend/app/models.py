@@ -36,3 +36,4 @@ class FieldMismatch(Base):
     field_name = Column(String, nullable=False)  # name | date_of_birth | address
     status = Column(String, nullable=False)  # pass | fail
     detail = Column(String, nullable=True)
+# TODO: implement OCR normalization + rapidfuzz cross-document matching here
