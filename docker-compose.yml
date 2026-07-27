@@ -1,0 +1,15 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - sevasetu_data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:///./data/sevasetu.db
+    restart: unless-stopped
+
+volumes:
+  sevasetu_data:

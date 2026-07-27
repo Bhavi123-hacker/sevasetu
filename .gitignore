@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local data (SQLite file, uploaded docs) — never commit these
+backend/data/*.db
+backend/data/*.sqlite3
+backend/uploads/
+
+# Env
+.env
+.env.local
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Frontend (once a React/Streamlit frontend is added)
+node_modules/
+dist/
+build/
+.next/
