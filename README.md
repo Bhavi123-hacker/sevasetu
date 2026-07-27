@@ -116,24 +116,43 @@ Requirements: [Docker Desktop](https://www.docker.com/products/docker-desktop/) 
 git clone <your-repo-url>
 cd sevasetu-starter
 
-# build and start the backend
+# build and start both services
 docker compose up --build
 ```
 
 Once it's running:
 
-- App landing page: [http://localhost:8000](http://localhost:8000)
-- Health check: [http://localhost:8000/api/health](http://localhost:8000/api/health)
-- Interactive API docs (Swagger UI): [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Citizen app (Streamlit):** [http://localhost:8501](http://localhost:8501) — select a service, upload documents, get a readiness score
+- **Officer queue (Streamlit):** the "Officer Queue" page in the same app's sidebar — demo login password is `seva123` (set via `OFFICER_DEMO_PASSWORD`; this is a demo-level gate, not real authentication — see the note in `frontend/pages/1_Officer_Queue.py`)
+- **API landing page:** [http://localhost:8000](http://localhost:8000)
+- **Health check:** [http://localhost:8000/api/health](http://localhost:8000/api/health)
+- **Interactive API docs (Swagger UI):** [http://localhost:8000/docs](http://localhost:8000/docs)
 
 To stop the app: `Ctrl+C`, then `docker compose down`.
+
+### Try it with sample documents
+
+Don't have real documents to test with? Generate a synthetic bundle (Aadhaar, ration card, electricity bill) with one deliberately injected address mismatch:
+
+```bash
+cd backend
+python -m app.generate_test_documents
+```
+
+This writes three PNGs to `backend/app/test_documents/` — upload them in the citizen app to see the consistency engine catch the mismatch for real.
 
 ### Running without Docker (for quick local iteration)
 
 ```bash
+# backend
 cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload
+
+# frontend, in a second terminal
+cd frontend
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
 ## Local Development Tools
@@ -146,6 +165,7 @@ uvicorn app.main:app --reload
 | `rapidfuzz` | Fuzzy string matching for the consistency engine and duplicate check |
 | `pytesseract` + system `tesseract-ocr` | OCR extraction from uploaded document images |
 | SQLite | Local, file-based database — no separate DB server to install |
+| Streamlit | Frontend for both the citizen upload flow and the officer queue |
 | GitHub CLI (`gh`) *(optional)* | Used by `scripts/create_github_issues.sh` to bulk-create the 25 user stories as GitHub Issues |
 
 ## Repository Structure
@@ -159,11 +179,26 @@ sevasetu-starter/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── app/
-│       ├── main.py          # FastAPI app, routes, stub readiness-check endpoint
-│       ├── database.py      # SQLAlchemy session setup
-│       ├── models.py        # Application, DocumentRecord, FieldMismatch tables
+│       ├── main.py                     # FastAPI app: upload, list, detail, resolve endpoints
+│       ├── database.py                 # SQLAlchemy session setup
+│       ├── models.py                   # Application, DocumentRecord, FieldMismatch tables
+│       ├── generate_test_documents.py  # Creates synthetic demo documents with an injected mismatch
+│       ├── pipeline/
+│       │   ├── ocr.py            # Tesseract wrapper
+│       │   ├── extraction.py     # Raw OCR text -> structured fields
+│       │   ├── consistency.py    # Cross-document fuzzy matching (the core differentiator)
+│       │   ├── checklist.py      # Required-documents lookup per service type
+│       │   ├── duplicates.py     # Fuzzy-matches against past applications
+│       │   └── scoring.py        # Aggregates everything into one readiness score
 │       └── static/
-│           └── index.html   # Landing page
+│           └── index.html
+├── frontend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── config.py                  # API URL + service/document definitions
+│   ├── app.py                     # Citizen flow: upload + readiness result
+│   └── pages/
+│       └── 1_Officer_Queue.py     # Officer login, queue, and per-application detail
 ├── docs/
 │   ├── user_stories_moscow.md
 │   └── wireframes_spec.md

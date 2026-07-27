@@ -15,6 +15,9 @@ class Application(Base):
     service_type = Column(String, nullable=False, index=True)
     readiness_score = Column(Integer, nullable=True)
     duplicate_suspected = Column(Boolean, default=False)
+    estimated_delay_days = Column(String, nullable=True)
+    recommendation = Column(String, nullable=True)
+    missing_documents = Column(String, nullable=True)  # comma-separated, simplest for an MVP
     status = Column(String, default="submitted")  # submitted | reviewed | resolved
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
