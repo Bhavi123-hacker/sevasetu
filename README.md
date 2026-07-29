@@ -36,6 +36,9 @@ A future where no citizen is turned away at a government office because of a mis
 - A single, unified readiness score combining all of the above
 - Plain-language explanation of any flagged issue, with an option to localize it
 - Officer queue sorted by readiness/risk, with an estimated processing delay per flagged application
+- Regulation Q&A assistant — retrieval-based, answers come from an actual regulation passage, never a generated guess
+- Citizen feedback with automatic sentiment analysis
+- Officer productivity dashboard — resolutions per officer, applications by service type, feedback sentiment trends
 
 ## Success Metrics
 
@@ -55,23 +58,27 @@ A future where no citizen is turned away at a government office because of a mis
 ## Architecture
 
 ```
-upload documents
-      │
-      ▼
-OCR extraction  (Tesseract, or Cloud Vision as an accuracy upgrade)
-      │
-      ▼
-field normalization  (dates, name formats, address tokens)
-      │
-      ▼
-consistency engine  (cross-document fuzzy match — the core differentiator)
+upload documents                    citizen question           citizen feedback
+      │                                    │                          │
+      ▼                                    ▼                          ▼
+OCR extraction                    TF-IDF + ChromaDB              VADER sentiment
+      │                              retrieval                    analysis
+      ▼                                    │                          │
+field normalization                        ▼                          ▼
+      │                          regulation passage              stored + tagged
+      ▼                             (retrieval only,
+consistency engine                   no LLM call)
       │
       ▼
 readiness score  (+ missing-document checklist, + duplicate-application check)
       │
       ▼
-officer queue  (sorted by readiness, plain-language explanation attached)
+officer queue + productivity dashboard
+      (sorted by readiness, plain-language explanation attached,
+       resolutions and feedback sentiment tracked per officer)
 ```
+
+The three flows share the same backend, database, and officer-facing surface, but the regulation Q&A and feedback paths are deliberately independent of the readiness pipeline — a citizen can ask a question or leave feedback without ever uploading a document.
 
 ## Tech Stack
 
@@ -81,8 +88,12 @@ officer queue  (sorted by readiness, plain-language explanation attached)
 | Database | SQLite via SQLAlchemy | Zero external dependency for the MVP; swappable for Postgres later |
 | OCR | Tesseract (default) / Google Cloud Vision (optional) | Free and offline by default |
 | Consistency matching | `rapidfuzz` | Same library reused for both the consistency engine and duplicate-application detection |
+| Regulation retrieval | TF-IDF (`scikit-learn`) + ChromaDB | No downloaded model, no API call, no rate limit to ever hit — see note below |
+| Feedback sentiment | VADER (`vaderSentiment`) | Rule-based, local, zero API — built for exactly this kind of short informal text |
 | Explanation layer | Bhashini API | Free, government-run, supports Indian languages |
 | Containerization | Docker + Docker Compose | One command to build and run locally |
+
+**On the free-tier constraint:** ChromaDB's default embedding function downloads an ~80MB model from the internet the first time it runs — that surfaced as a real failure in a network-restricted sandbox while building this, not a hypothetical concern. Supplying TF-IDF vectors directly instead avoids that download entirely, alongside avoiding any per-query API cost. The regulation assistant is retrieval-only for the same reason: no generation step means no LLM API call sits in the request path at all, so there's no quota to exhaust no matter how much the app gets used during testing or grading.
 
 ---
 
@@ -179,17 +190,20 @@ sevasetu-starter/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── app/
-│       ├── main.py                     # FastAPI app: upload, list, detail, resolve endpoints
+│       ├── main.py                     # FastAPI app: applications, ask, feedback, officer-stats endpoints
 │       ├── database.py                 # SQLAlchemy session setup
-│       ├── models.py                   # Application, DocumentRecord, FieldMismatch tables
+│       ├── models.py                   # Application, DocumentRecord, FieldMismatch, Feedback tables
 │       ├── generate_test_documents.py  # Creates synthetic demo documents with an injected mismatch
+│       ├── regulation_corpus.py        # Illustrative regulation text the RAG assistant retrieves from
 │       ├── pipeline/
 │       │   ├── ocr.py            # Tesseract wrapper
 │       │   ├── extraction.py     # Raw OCR text -> structured fields
 │       │   ├── consistency.py    # Cross-document fuzzy matching (the core differentiator)
 │       │   ├── checklist.py      # Required-documents lookup per service type
 │       │   ├── duplicates.py     # Fuzzy-matches against past applications
-│       │   └── scoring.py        # Aggregates everything into one readiness score
+│       │   ├── scoring.py        # Aggregates everything into one readiness score
+│       │   ├── rag.py            # TF-IDF + ChromaDB retrieval, no API/model download needed
+│       │   └── sentiment.py      # VADER sentiment analysis, fully local
 │       └── static/
 │           └── index.html
 ├── frontend/
@@ -198,7 +212,10 @@ sevasetu-starter/
 │   ├── config.py                  # API URL + service/document definitions
 │   ├── app.py                     # Citizen flow: upload + readiness result
 │   └── pages/
-│       └── 1_Officer_Queue.py     # Officer login, queue, and per-application detail
+│       ├── 1_Officer_Queue.py     # Officer login, queue, and per-application detail
+│       ├── 2_Ask_A_Question.py    # Citizen regulation Q&A
+│       ├── 3_Feedback.py          # Citizen feedback submission
+│       └── 4_Officer_Dashboard.py # Productivity stats + feedback insights
 ├── docs/
 │   ├── user_stories_moscow.md
 │   └── wireframes_spec.md

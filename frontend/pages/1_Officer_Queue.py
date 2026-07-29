@@ -16,15 +16,19 @@ OFFICER_PASSWORD = os.getenv("OFFICER_DEMO_PASSWORD", "seva123")
 
 if "officer_logged_in" not in st.session_state:
     st.session_state.officer_logged_in = False
+    st.session_state.officer_name = None
 
 if not st.session_state.officer_logged_in:
     st.title("Officer Login")
     st.caption("Demo access gate — not production authentication.")
-    officer_id = st.text_input("Officer ID")
+    officer_name = st.text_input("Your name")
     password = st.text_input("Password", type="password")
     if st.button("Log in", type="primary"):
-        if password == OFFICER_PASSWORD:
+        if not officer_name.strip():
+            st.error("Enter your name — it's used to attribute resolved applications.")
+        elif password == OFFICER_PASSWORD:
             st.session_state.officer_logged_in = True
+            st.session_state.officer_name = officer_name.strip()
             st.rerun()
         else:
             st.error("Incorrect password.")
@@ -33,6 +37,7 @@ if not st.session_state.officer_logged_in:
 # --- Queue ---
 
 st.title("Officer Queue")
+st.caption(f"Logged in as {st.session_state.officer_name}")
 
 try:
     applications = requests.get(f"{API_BASE_URL}/api/applications", timeout=15).json()
@@ -106,5 +111,11 @@ for application in filtered:
 
         if detail["status"] != "resolved":
             if st.button("Mark as reviewed / resolved", key=f"resolve_{detail['id']}"):
-                requests.post(f"{API_BASE_URL}/api/applications/{detail['id']}/resolve", timeout=15)
+                requests.post(
+                    f"{API_BASE_URL}/api/applications/{detail['id']}/resolve",
+                    json={"officer_name": st.session_state.officer_name},
+                    timeout=15,
+                )
                 st.rerun()
+        else:
+            st.caption(f"Resolved{' by ' + detail['resolved_by'] if detail.get('resolved_by') else ''}")
