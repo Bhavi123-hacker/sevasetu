@@ -36,6 +36,9 @@ A future where no citizen is turned away at a government office because of a mis
 - A single, unified readiness score combining all of the above
 - Plain-language explanation of any flagged issue, with an option to localize it
 - Officer queue sorted by readiness/risk, with an estimated processing delay per flagged application
+- Regulation Q&A assistant — retrieval-based, answers come from an actual regulation passage, never a generated guess
+- Citizen feedback with automatic sentiment analysis
+- Officer productivity dashboard — resolutions per officer, applications by service type, feedback sentiment trends
 
 ## Success Metrics
 
@@ -55,23 +58,27 @@ A future where no citizen is turned away at a government office because of a mis
 ## Architecture
 
 ```
-upload documents
-      │
-      ▼
-OCR extraction  (Tesseract, or Cloud Vision as an accuracy upgrade)
-      │
-      ▼
-field normalization  (dates, name formats, address tokens)
-      │
-      ▼
-consistency engine  (cross-document fuzzy match — the core differentiator)
+upload documents                    citizen question           citizen feedback
+      │                                    │                          │
+      ▼                                    ▼                          ▼
+OCR extraction                    TF-IDF + ChromaDB              VADER sentiment
+      │                              retrieval                    analysis
+      ▼                                    │                          │
+field normalization                        ▼                          ▼
+      │                          regulation passage              stored + tagged
+      ▼                             (retrieval only,
+consistency engine                   no LLM call)
       │
       ▼
 readiness score  (+ missing-document checklist, + duplicate-application check)
       │
       ▼
-officer queue  (sorted by readiness, plain-language explanation attached)
+officer queue + productivity dashboard
+      (sorted by readiness, plain-language explanation attached,
+       resolutions and feedback sentiment tracked per officer)
 ```
+
+The three flows share the same backend, database, and officer-facing surface, but the regulation Q&A and feedback paths are deliberately independent of the readiness pipeline — a citizen can ask a question or leave feedback without ever uploading a document.
 
 ## Tech Stack
 
@@ -81,8 +88,12 @@ officer queue  (sorted by readiness, plain-language explanation attached)
 | Database | SQLite via SQLAlchemy | Zero external dependency for the MVP; swappable for Postgres later |
 | OCR | Tesseract (default) / Google Cloud Vision (optional) | Free and offline by default |
 | Consistency matching | `rapidfuzz` | Same library reused for both the consistency engine and duplicate-application detection |
+| Regulation retrieval | TF-IDF (`scikit-learn`) + ChromaDB | No downloaded model, no API call, no rate limit to ever hit — see note below |
+| Feedback sentiment | VADER (`vaderSentiment`) | Rule-based, local, zero API — built for exactly this kind of short informal text |
 | Explanation layer | Bhashini API | Free, government-run, supports Indian languages |
 | Containerization | Docker + Docker Compose | One command to build and run locally |
+
+**On the free-tier constraint:** ChromaDB's default embedding function downloads an ~80MB model from the internet the first time it runs — that surfaced as a real failure in a network-restricted sandbox while building this, not a hypothetical concern. Supplying TF-IDF vectors directly instead avoids that download entirely, alongside avoiding any per-query API cost. The regulation assistant is retrieval-only for the same reason: no generation step means no LLM API call sits in the request path at all, so there's no quota to exhaust no matter how much the app gets used during testing or grading.
 
 ---
 
@@ -116,24 +127,43 @@ Requirements: [Docker Desktop](https://www.docker.com/products/docker-desktop/) 
 git clone <your-repo-url>
 cd sevasetu-starter
 
-# build and start the backend
+# build and start both services
 docker compose up --build
 ```
 
 Once it's running:
 
-- App landing page: [http://localhost:8000](http://localhost:8000)
-- Health check: [http://localhost:8000/api/health](http://localhost:8000/api/health)
-- Interactive API docs (Swagger UI): [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Citizen app (Streamlit):** [http://localhost:8501](http://localhost:8501) — select a service, upload documents, get a readiness score
+- **Officer queue (Streamlit):** the "Officer Queue" page in the same app's sidebar — demo login password is `seva123` (set via `OFFICER_DEMO_PASSWORD`; this is a demo-level gate, not real authentication — see the note in `frontend/pages/1_Officer_Queue.py`)
+- **API landing page:** [http://localhost:8000](http://localhost:8000)
+- **Health check:** [http://localhost:8000/api/health](http://localhost:8000/api/health)
+- **Interactive API docs (Swagger UI):** [http://localhost:8000/docs](http://localhost:8000/docs)
 
 To stop the app: `Ctrl+C`, then `docker compose down`.
+
+### Try it with sample documents
+
+Don't have real documents to test with? Generate a synthetic bundle (Aadhaar, ration card, electricity bill) with one deliberately injected address mismatch:
+
+```bash
+cd backend
+python -m app.generate_test_documents
+```
+
+This writes three PNGs to `backend/app/test_documents/` — upload them in the citizen app to see the consistency engine catch the mismatch for real.
 
 ### Running without Docker (for quick local iteration)
 
 ```bash
+# backend
 cd backend
 pip install -r requirements.txt
 uvicorn app.main:app --reload
+
+# frontend, in a second terminal
+cd frontend
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
 ## Local Development Tools
@@ -146,6 +176,7 @@ uvicorn app.main:app --reload
 | `rapidfuzz` | Fuzzy string matching for the consistency engine and duplicate check |
 | `pytesseract` + system `tesseract-ocr` | OCR extraction from uploaded document images |
 | SQLite | Local, file-based database — no separate DB server to install |
+| Streamlit | Frontend for both the citizen upload flow and the officer queue |
 | GitHub CLI (`gh`) *(optional)* | Used by `scripts/create_github_issues.sh` to bulk-create the 25 user stories as GitHub Issues |
 
 ## Repository Structure
@@ -159,11 +190,32 @@ sevasetu-starter/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── app/
-│       ├── main.py          # FastAPI app, routes, stub readiness-check endpoint
-│       ├── database.py      # SQLAlchemy session setup
-│       ├── models.py        # Application, DocumentRecord, FieldMismatch tables
+│       ├── main.py                     # FastAPI app: applications, ask, feedback, officer-stats endpoints
+│       ├── database.py                 # SQLAlchemy session setup
+│       ├── models.py                   # Application, DocumentRecord, FieldMismatch, Feedback tables
+│       ├── generate_test_documents.py  # Creates synthetic demo documents with an injected mismatch
+│       ├── regulation_corpus.py        # Illustrative regulation text the RAG assistant retrieves from
+│       ├── pipeline/
+│       │   ├── ocr.py            # Tesseract wrapper
+│       │   ├── extraction.py     # Raw OCR text -> structured fields
+│       │   ├── consistency.py    # Cross-document fuzzy matching (the core differentiator)
+│       │   ├── checklist.py      # Required-documents lookup per service type
+│       │   ├── duplicates.py     # Fuzzy-matches against past applications
+│       │   ├── scoring.py        # Aggregates everything into one readiness score
+│       │   ├── rag.py            # TF-IDF + ChromaDB retrieval, no API/model download needed
+│       │   └── sentiment.py      # VADER sentiment analysis, fully local
 │       └── static/
-│           └── index.html   # Landing page
+│           └── index.html
+├── frontend/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   ├── config.py                  # API URL + service/document definitions
+│   ├── app.py                     # Citizen flow: upload + readiness result
+│   └── pages/
+│       ├── 1_Officer_Queue.py     # Officer login, queue, and per-application detail
+│       ├── 2_Ask_A_Question.py    # Citizen regulation Q&A
+│       ├── 3_Feedback.py          # Citizen feedback submission
+│       └── 4_Officer_Dashboard.py # Productivity stats + feedback insights
 ├── docs/
 │   ├── user_stories_moscow.md
 │   └── wireframes_spec.md

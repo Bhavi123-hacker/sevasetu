@@ -58,3 +58,29 @@ This is a build spec for Figma, not a substitute for it — Figma files can't be
 - List of service types, each expandable to show its required-document checklist
 - "Add document requirement" control per service type
 - This screen can be wireframed simply and left unbuilt — the checklist itself ships hardcoded in the MVP; this screen is what makes it editable later
+
+## 7. Ask a Question (citizen, new)
+
+**Who:** Citizen. **Maps to user stories:** US-26, US-27.
+
+- Single text input, placeholder like "e.g. How long does processing take?"
+- Below it, the matched regulation passage displayed as-is, with a confidence label (High / Moderate / Low) rather than a raw number — a citizen doesn't need to know what "0.31 relevance" means, they need to know whether to trust it
+- If confidence is low, a visible note suggesting rephrasing or contacting an officer directly — this screen should never look more confident than the underlying match actually is
+
+## 8. Submit Feedback (citizen, new)
+
+**Who:** Citizen. **Maps to user stories:** US-28, US-29.
+
+- Name field (optional), application ID field (optional — only relevant if the feedback is about a specific submission), feedback text area
+- No sentiment shown back to the citizen on this screen — sentiment is an officer-facing signal, not something to expose to the person who wrote it
+
+## 9. Officer Dashboard (officer, new)
+
+**Who:** Officer. **Maps to user stories:** US-30, US-31, US-32, US-33.
+
+- Two sections on one screen: Productivity (total / resolved / pending / average readiness as summary numbers, a bar chart of resolutions per officer, a bar chart of applications by service type) and Feedback Insights (positive/neutral/negative counts, a scrollable list of recent feedback with sentiment tags)
+- Deliberately combines what the architecture diagram draws as two separate boxes (Officer Productivity Dashboard, Feedback Insights) into one screen — they're both "officer-facing analytics over the same data," and splitting them into separate screens would just mean the same numbers rendered twice
+
+## On screen count
+
+That's 9 screens, not 6. The assignment's "6" reads as illustrative (it's introduced with "e.g."), not a hard cap — but if a strict 6 is required, the safest cut is folding screen 9 (Officer Dashboard) into a simpler single-number summary bolted onto the existing Officer Queue screen. Merging screens 7 and 8 isn't recommended — a citizen asking a question and a citizen filing a complaint are different enough intents to keep visually separate.

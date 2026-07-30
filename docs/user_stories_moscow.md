@@ -37,13 +37,37 @@
 | US-24 | As an officer, I want a simple count of how many applications in my queue are clean versus flagged, so that I can gauge my day's workload at a glance. | Could |
 | US-25 | As an officer or admin, I want to update which documents are required for a given service type, so that the missing-document checklist stays accurate when rules change. | Won't (this iteration) |
 
-## Why the two "Won't" stories are deferred
+## Why US-23 and US-25 are deferred
 
-Both US-23 and US-25 are real, reasonable features — they're deferred, not rejected. A hardcoded checklist and no note-taking are honest, working shortcuts for a first version; both are natural additions once the core pipeline (OCR → consistency → readiness) is proven out.
+Both are real, reasonable features — deferred, not rejected. A hardcoded checklist and no note-taking are honest, working shortcuts for a first version; both are natural additions once the core pipeline is proven out.
 
-## Priority counts
+## Regulation assistant, feedback, and officer dashboard stories
 
-- **Must have:** 11 stories — the core pipeline (upload → OCR → consistency → readiness score) plus basic officer access.
-- **Should have:** 8 stories — meaningful improvements that aren't required for the pipeline to make sense end to end.
-- **Could have:** 4 stories — polish and convenience.
-- **Won't have (this iteration):** 2 stories — explicitly documented, deliberately deferred.
+Added when scope expanded to match the full architecture diagram (RAG assistant, feedback sentiment, officer productivity dashboard) — these weren't part of the original 25.
+
+| ID | Story | Priority |
+|---|---|---|
+| US-26 | As a citizen, I want to ask a question about the application process in plain language, so that I don't have to dig through official regulations myself. | Must |
+| US-27 | As a citizen, I want to see how confident the answer is, so that I know whether to trust it or ask an officer directly. | Should |
+| US-28 | As a citizen, I want to submit feedback about my experience, so that the officer team knows what's working and what isn't. | Must |
+| US-29 | As a citizen, I want to optionally link my feedback to a specific application, so that officers have context if they need to follow up. | Could |
+| US-30 | As an officer, I want to see how many applications I've personally resolved, so that I can track my own workload over time. | Should |
+| US-31 | As an officer, I want to see application volume broken down by service type, so that I know where demand is concentrated. | Could |
+| US-32 | As an officer, I want to see a summary of citizen feedback sentiment, so that I can spot recurring problems in the process itself, not just in individual applications. | Should |
+| US-33 | As an officer, I want to read recent feedback comments directly, so that I understand issues in citizens' own words, not just as a sentiment score. | Could |
+
+## A number worth flagging
+
+That's 33 stories total, not 25. The assignment brief asks for 25. Two honest ways to handle it:
+
+- **Submit all 33.** More real, tested coverage than asked for is a defensible thing to hand in, and every story here maps to something that actually runs — nothing padded in to hit a number.
+- **Trim to 25.** Drop from the bottom of the Could-have tier first (US-14, US-22, US-24, US-29, US-31, US-33 are the lowest-stakes six — dropping six of those plus one more gets to 25 without touching anything the demo depends on).
+
+Not resolving this without you — it depends on whether your rubric wants exactly 25 or at least 25.
+
+## Priority counts (all 33)
+
+- **Must have:** 13
+- **Should have:** 11
+- **Could have:** 7
+- **Won't have (this iteration):** 2

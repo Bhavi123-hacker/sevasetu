@@ -132,5 +132,38 @@ create_issue "US-25: Configurable required-documents checklist" \
   "As an officer or admin, I want to update which documents are required for a given service type, so that the missing-document checklist stays accurate when rules change." \
   "wont-have" "officer"
 
-echo "Done. Created 25 issues in $REPO."
+create_issue "US-26: Ask a regulation question" \
+  "As a citizen, I want to ask a question about the application process in plain language, so that I don't have to dig through official regulations myself." \
+  "must-have" "citizen"
+
+create_issue "US-27: See answer confidence" \
+  "As a citizen, I want to see how confident the answer is, so that I know whether to trust it or ask an officer directly." \
+  "should-have" "citizen"
+
+create_issue "US-28: Submit feedback" \
+  "As a citizen, I want to submit feedback about my experience, so that the officer team knows what's working and what isn't." \
+  "must-have" "citizen"
+
+create_issue "US-29: Link feedback to an application" \
+  "As a citizen, I want to optionally link my feedback to a specific application, so that officers have context if they need to follow up." \
+  "could-have" "citizen"
+
+create_issue "US-30: Personal resolution count" \
+  "As an officer, I want to see how many applications I've personally resolved, so that I can track my own workload over time." \
+  "should-have" "officer"
+
+create_issue "US-31: Volume by service type" \
+  "As an officer, I want to see application volume broken down by service type, so that I know where demand is concentrated." \
+  "could-have" "officer"
+
+create_issue "US-32: Feedback sentiment summary" \
+  "As an officer, I want to see a summary of citizen feedback sentiment, so that I can spot recurring problems in the process itself, not just in individual applications." \
+  "should-have" "officer"
+
+create_issue "US-33: Read raw feedback comments" \
+  "As an officer, I want to read recent feedback comments directly, so that I understand issues in citizens' own words, not just as a sentiment score." \
+  "could-have" "officer"
+
+echo "Done. Created 33 issues in $REPO."
+echo "That's 8 more than the assignment's 25 — see docs/user_stories_moscow.md for which six to drop if you need exactly 25."
 echo "Add them to a GitHub Project board from the Issues tab -> Projects."
