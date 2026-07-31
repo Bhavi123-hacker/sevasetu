@@ -24,19 +24,24 @@ from pydantic import BaseModel
 from PIL import Image
 from sqlalchemy.orm import Session
 
-from .database import engine, Base, get_db
+from .database import engine, Base, get_db, SessionLocal
 from . import models
 from .pipeline.ocr import extract_text_from_image
 from .pipeline.extraction import extract_fields
 from .pipeline.consistency import run_consistency_check
-from .pipeline.checklist import find_missing_documents
+from .pipeline.checklist import find_missing_documents, seed_defaults_if_empty
 from .pipeline.duplicates import find_probable_duplicate
 from .pipeline.scoring import compute_readiness
 from .pipeline.rag import index_corpus, answer_question
 from .pipeline.sentiment import analyze_sentiment
+from .pipeline.generation import generate_answer
 
 Base.metadata.create_all(bind=engine)
 index_corpus()  # idempotent — indexes the regulation corpus once, no-ops if already indexed
+
+# One-off session for startup seeding — get_db is request-scoped, this isn't a request.
+with SessionLocal() as _startup_db:
+    seed_defaults_if_empty(_startup_db)
 
 app = FastAPI(title="SevaSetu API", version="0.2.0")
 
@@ -104,7 +109,7 @@ async def submit_application(request: Request, db: Session = Depends(get_db)):
         ))
 
     field_checks = run_consistency_check(fields_by_doc)
-    missing_documents = find_missing_documents(service_type, list(uploaded_docs.keys()))
+    missing_documents = find_missing_documents(db, service_type, list(uploaded_docs.keys()))
 
     existing = db.query(models.Application).filter(
         models.Application.service_type == service_type
@@ -225,6 +230,7 @@ class AskMatch(BaseModel):
 class AskResponse(BaseModel):
     question: str
     matches: List[AskMatch]
+    generated_answer: Optional[str] = None
 
 
 @app.post("/api/ask", response_model=AskResponse)
@@ -232,9 +238,15 @@ def ask_question(payload: AskRequest):
     if not payload.question.strip():
         raise HTTPException(status_code=422, detail="question must not be empty")
     matches = answer_question(payload.question, top_k=2)
+
+    generated_answer = None
+    if matches:
+        generated_answer = generate_answer(payload.question, matches[0]["text"])
+
     return AskResponse(
         question=payload.question,
         matches=[AskMatch(**m) for m in matches],
+        generated_answer=generated_answer,
     )
 
 
@@ -326,3 +338,39 @@ def officer_stats(db: Session = Depends(get_db)):
         "feedback_sentiment_counts": sentiment_counts,
         "total_feedback": len(feedback),
     }
+
+
+# ---------- Administrator: required-documents settings ----------
+# This is what makes Administrator a genuinely distinct role from
+# Officer, not just a relabeled login. An Officer processes applications;
+# an Administrator changes the rules those applications get checked
+# against. Same distinction the architecture diagram draws.
+
+@app.get("/api/service-requirements")
+def get_service_requirements(db: Session = Depends(get_db)):
+    rows = db.query(models.RequiredDocument).all()
+    result: dict = {}
+    for row in rows:
+        result.setdefault(row.service_type, []).append(row.document_type)
+    return result
+
+
+class UpdateRequirementsRequest(BaseModel):
+    document_types: List[str]
+
+
+@app.put("/api/service-requirements/{service_type}")
+def update_service_requirements(
+    service_type: str, payload: UpdateRequirementsRequest, db: Session = Depends(get_db)
+):
+    db.query(models.RequiredDocument).filter(
+        models.RequiredDocument.service_type == service_type
+    ).delete()
+    for doc_type in payload.document_types:
+        db.add(models.RequiredDocument(
+            id=str(uuid.uuid4())[:8],
+            service_type=service_type,
+            document_type=doc_type,
+        ))
+    db.commit()
+    return {"service_type": service_type, "document_types": payload.document_types}

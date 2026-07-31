@@ -53,3 +53,18 @@ class FieldMismatch(Base):
     field_name = Column(String, nullable=False)  # name | date_of_birth | address
     status = Column(String, nullable=False)  # pass | fail
     detail = Column(String, nullable=True)
+
+
+class RequiredDocument(Base):
+    """
+    One row per (service_type, document_type). Replaces the hardcoded
+    SERVICE_REQUIREMENTS dict — this is what US-25 (administrator edits
+    the checklist) actually needed to exist. Seeded once at startup with
+    the same defaults that used to live in code; editable after that via
+    the admin endpoints.
+    """
+    __tablename__ = "required_documents"
+
+    id = Column(String, primary_key=True, index=True)
+    service_type = Column(String, nullable=False, index=True)
+    document_type = Column(String, nullable=False)

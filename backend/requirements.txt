@@ -9,3 +9,4 @@ python-multipart>=0.0.9
 scikit-learn>=1.4
 chromadb>=0.5
 vaderSentiment>=3.3
+requests>=2.31

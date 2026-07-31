@@ -21,6 +21,8 @@ SevaSetu is a pipeline that checks a citizen's own documents **against each othe
 
 **Suresh — front-desk officer.** Processes 30–40 applications a day at a taluk office. Currently reads every document by hand to catch mismatches. Wants a queue that tells him which applications are clean and which need a closer look, with the specific conflict already called out.
 
+**Priya — administrator.** Doesn't process individual applications — manages the rules those applications get checked against. When a scheme's document requirements change, she updates the checklist once, and every application submitted after that reflects it, instead of someone editing code.
+
 **Anita — returning applicant.** Had an application rejected for a document mismatch she didn't understand. On her second attempt, she wants a clear, specific explanation of exactly what to fix — not just a rejection notice.
 
 ## Vision Statement
@@ -36,9 +38,11 @@ A future where no citizen is turned away at a government office because of a mis
 - A single, unified readiness score combining all of the above
 - Plain-language explanation of any flagged issue, with an option to localize it
 - Officer queue sorted by readiness/risk, with an estimated processing delay per flagged application
-- Regulation Q&A assistant — retrieval-based, answers come from an actual regulation passage, never a generated guess
+- Regulation Q&A assistant — retrieval-based by default; an optional local model (Ollama) can generate a natural-language answer grounded in the retrieved passage, shown alongside the passage itself rather than instead of it
 - Citizen feedback with automatic sentiment analysis
 - Officer productivity dashboard — resolutions per officer, applications by service type, feedback sentiment trends
+- Citizens can look up a submitted application's status later using its ID
+- Administrators can edit the required-documents checklist per service without touching code
 
 ## Success Metrics
 
@@ -54,6 +58,7 @@ A future where no citizen is turned away at a government office because of a mis
 - **OCR default is Tesseract** — offline, free, no account required. Google Cloud Vision is an optional swap for higher accuracy on messier scans; it requires linking a billing account under GCP's free tier (1,000 units/month, no charge under that limit), which is a setup step, not a real cost.
 - **Bhashini (free, government-run) powers the plain-language / multilingual explanation layer.** This is the one component that calls an external API at runtime; the core OCR → consistency → readiness pipeline runs fully offline.
 - **Out of scope for this MVP** (documented here, not built): feedback sentiment analysis, an officer productivity/analytics dashboard, and learned/ML-based multilingual name matching. These are real ideas for a Phase 2, not abandoned — they're deliberately excluded so the MVP can be executed well rather than partially.
+- **Frontend is Streamlit, not React/Next.js, and there's no JWT auth** — a demo password gate stands in for real authentication. This is a real, open gap against the full architecture diagram, not an oversight: porting the working Streamlit app (6 pages, file uploads, live charts) to React with real token-based auth is a substantially larger task than everything else in this list combined, and hasn't been started.
 
 ## Architecture
 
@@ -89,11 +94,14 @@ The three flows share the same backend, database, and officer-facing surface, bu
 | OCR | Tesseract (default) / Google Cloud Vision (optional) | Free and offline by default |
 | Consistency matching | `rapidfuzz` | Same library reused for both the consistency engine and duplicate-application detection |
 | Regulation retrieval | TF-IDF (`scikit-learn`) + ChromaDB | No downloaded model, no API call, no rate limit to ever hit — see note below |
+| Answer generation (optional) | Ollama, local model (`llama3.2:1b` default) | Generates a natural-language answer on top of the retrieved passage. Free, no key, no signup — the tradeoff for that is real local compute, not a hosted API's SLA |
 | Feedback sentiment | VADER (`vaderSentiment`) | Rule-based, local, zero API — built for exactly this kind of short informal text |
 | Explanation layer | Bhashini API | Free, government-run, supports Indian languages |
 | Containerization | Docker + Docker Compose | One command to build and run locally |
 
-**On the free-tier constraint:** ChromaDB's default embedding function downloads an ~80MB model from the internet the first time it runs — that surfaced as a real failure in a network-restricted sandbox while building this, not a hypothetical concern. Supplying TF-IDF vectors directly instead avoids that download entirely, alongside avoiding any per-query API cost. The regulation assistant is retrieval-only for the same reason: no generation step means no LLM API call sits in the request path at all, so there's no quota to exhaust no matter how much the app gets used during testing or grading.
+**On the free-tier constraint:** ChromaDB's default embedding function downloads an ~80MB model from the internet the first time it runs — that surfaced as a real failure in a network-restricted sandbox while building this, not a hypothetical concern. Supplying TF-IDF vectors directly instead avoids that download entirely, alongside avoiding any per-query API cost.
+
+**On the Ollama generation layer specifically:** this is the one piece of this codebase that wasn't run end-to-end before being committed — Ollama needs to download a model from the internet, which was blocked in the sandbox this was built in. It's written against Ollama's stable, documented REST API and designed to fail silently (falls back to showing the retrieved passage) if it's not reachable, but "verify this yourself first" applies here in a way it doesn't for the rest of this project.
 
 ---
 
@@ -134,12 +142,22 @@ docker compose up --build
 Once it's running:
 
 - **Citizen app (Streamlit):** [http://localhost:8501](http://localhost:8501) — select a service, upload documents, get a readiness score
-- **Officer queue (Streamlit):** the "Officer Queue" page in the same app's sidebar — demo login password is `seva123` (set via `OFFICER_DEMO_PASSWORD`; this is a demo-level gate, not real authentication — see the note in `frontend/pages/1_Officer_Queue.py`)
+- **Officer / Administrator staff area:** the "Officer Queue" page in the same app's sidebar — demo login password is `seva123` (set via `OFFICER_DEMO_PASSWORD`; this is a demo-level gate, not real authentication). Choose your role (Officer or Administrator) at login.
 - **API landing page:** [http://localhost:8000](http://localhost:8000)
 - **Health check:** [http://localhost:8000/api/health](http://localhost:8000/api/health)
 - **Interactive API docs (Swagger UI):** [http://localhost:8000/docs](http://localhost:8000/docs)
 
 To stop the app: `Ctrl+C`, then `docker compose down`.
+
+### Enabling generated answers (optional)
+
+The regulation assistant works without this — it'll show the matched passage directly. To get a generated natural-language answer on top of it, pull a model into the Ollama container once, after `docker compose up` is running:
+
+```bash
+docker compose exec ollama ollama pull llama3.2:1b
+```
+
+This downloads about 1.3GB the first time. After it finishes, questions asked through "Ask a Question" will show a generated answer above the retrieved passage. If this step is skipped, or the pull fails, the app keeps working exactly as before — nothing else depends on this.
 
 ### Try it with sample documents
 
@@ -203,6 +221,7 @@ sevasetu-starter/
 │       │   ├── duplicates.py     # Fuzzy-matches against past applications
 │       │   ├── scoring.py        # Aggregates everything into one readiness score
 │       │   ├── rag.py            # TF-IDF + ChromaDB retrieval, no API/model download needed
+│       │   ├── generation.py     # Optional Ollama generation layer on top of retrieval — untested by me, see note above
 │       │   └── sentiment.py      # VADER sentiment analysis, fully local
 │       └── static/
 │           └── index.html
@@ -212,10 +231,12 @@ sevasetu-starter/
 │   ├── config.py                  # API URL + service/document definitions
 │   ├── app.py                     # Citizen flow: upload + readiness result
 │   └── pages/
-│       ├── 1_Officer_Queue.py     # Officer login, queue, and per-application detail
+│       ├── 1_Officer_Queue.py     # Staff login (Officer/Administrator), queue, per-application detail
 │       ├── 2_Ask_A_Question.py    # Citizen regulation Q&A
 │       ├── 3_Feedback.py          # Citizen feedback submission
-│       └── 4_Officer_Dashboard.py # Productivity stats + feedback insights
+│       ├── 4_Officer_Dashboard.py # Productivity stats + feedback insights
+│       ├── 5_Admin_Settings.py    # Administrator-only: edit required-documents checklist
+│       └── 6_Check_Status.py      # Citizen: look up a submitted application by ID
 ├── docs/
 │   ├── user_stories_moscow.md
 │   └── wireframes_spec.md

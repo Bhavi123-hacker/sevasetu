@@ -18,7 +18,7 @@
 | US-10 | As a citizen, I want to re-upload a corrected document after a flag, so that my readiness score updates without starting the whole application over. | Should |
 | US-11 | As a citizen, I want to be warned if I've already submitted this exact request before, so that I don't accidentally create a duplicate application. | Must |
 | US-12 | As a citizen, I want to receive my results in my preferred language, so that a language barrier doesn't stop me from understanding my own application status. | Should |
-| US-13 | As a citizen, I want to check the status of my application after I've submitted it, so that I don't have to call or visit the office for an update. | Should |
+| US-13 | As a citizen, I want to check the status of my application after I've submitted it, so that I don't have to call or visit the office for an update. | Should — **built** |
 | US-14 | As a citizen with a low-quality camera or scan, I want to be warned if my uploaded photo is too blurry to read, so that I re-take it before wasting a submission attempt. | Could |
 
 ## Officer stories
@@ -35,11 +35,11 @@
 | US-22 | As an officer, I want to search for an application by the citizen's name or ID, so that I can quickly find a specific case someone is asking about. | Could |
 | US-23 | As an officer, I want to add a short note to an application, so that the next officer who opens it knows what I already checked. | Won't (this iteration) |
 | US-24 | As an officer, I want a simple count of how many applications in my queue are clean versus flagged, so that I can gauge my day's workload at a glance. | Could |
-| US-25 | As an officer or admin, I want to update which documents are required for a given service type, so that the missing-document checklist stays accurate when rules change. | Won't (this iteration) |
+| US-25 | As an Administrator, I want to update which documents are required for a given service type, so that the missing-document checklist stays accurate when rules change. | Must — **built, no longer deferred** |
 
-## Why US-23 and US-25 are deferred
+## Why US-23 is still deferred
 
-Both are real, reasonable features — deferred, not rejected. A hardcoded checklist and no note-taking are honest, working shortcuts for a first version; both are natural additions once the core pipeline is proven out.
+Adding a note to an application (US-23) is a real, reasonable feature — deferred, not rejected. US-25 (admin-editable checklist), which used to sit in this section too, is built now: see the Administrator role and Admin Settings page.
 
 ## Regulation assistant, feedback, and officer dashboard stories
 
@@ -55,19 +55,21 @@ Added when scope expanded to match the full architecture diagram (RAG assistant,
 | US-31 | As an officer, I want to see application volume broken down by service type, so that I know where demand is concentrated. | Could |
 | US-32 | As an officer, I want to see a summary of citizen feedback sentiment, so that I can spot recurring problems in the process itself, not just in individual applications. | Should |
 | US-33 | As an officer, I want to read recent feedback comments directly, so that I understand issues in citizens' own words, not just as a sentiment score. | Could |
+| US-34 | As an Administrator, I want to log in as a distinct role from Officer, so that the actions I can take (editing rules) are separated from the actions an Officer takes (resolving applications). | Must |
+| US-35 | As a citizen, I want a plain-language generated answer to my question when one is available, so that I don't have to parse a formal regulation passage myself. | Could — depends on Ollama being available; degrades gracefully to the passage itself |
 
 ## A number worth flagging
 
-That's 33 stories total, not 25. The assignment brief asks for 25. Two honest ways to handle it:
+That's 35 stories total, not 25. The assignment brief asks for 25. Two honest ways to handle it:
 
 - **Submit all 33.** More real, tested coverage than asked for is a defensible thing to hand in, and every story here maps to something that actually runs — nothing padded in to hit a number.
 - **Trim to 25.** Drop from the bottom of the Could-have tier first (US-14, US-22, US-24, US-29, US-31, US-33 are the lowest-stakes six — dropping six of those plus one more gets to 25 without touching anything the demo depends on).
 
 Not resolving this without you — it depends on whether your rubric wants exactly 25 or at least 25.
 
-## Priority counts (all 33)
+## Priority counts (all 35)
 
-- **Must have:** 13
+- **Must have:** 15
 - **Should have:** 11
-- **Could have:** 7
-- **Won't have (this iteration):** 2
+- **Could have:** 8
+- **Won't have (this iteration):** 1

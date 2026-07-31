@@ -17,11 +17,13 @@ OFFICER_PASSWORD = os.getenv("OFFICER_DEMO_PASSWORD", "seva123")
 if "officer_logged_in" not in st.session_state:
     st.session_state.officer_logged_in = False
     st.session_state.officer_name = None
+    st.session_state.staff_role = None
 
 if not st.session_state.officer_logged_in:
-    st.title("Officer Login")
+    st.title("Staff Login")
     st.caption("Demo access gate — not production authentication.")
     officer_name = st.text_input("Your name")
+    role = st.radio("Role", ["Officer", "Administrator"], horizontal=True)
     password = st.text_input("Password", type="password")
     if st.button("Log in", type="primary"):
         if not officer_name.strip():
@@ -29,10 +31,14 @@ if not st.session_state.officer_logged_in:
         elif password == OFFICER_PASSWORD:
             st.session_state.officer_logged_in = True
             st.session_state.officer_name = officer_name.strip()
+            st.session_state.staff_role = role
             st.rerun()
         else:
             st.error("Incorrect password.")
     st.stop()
+
+if st.session_state.staff_role == "Administrator":
+    st.info("Logged in as **Administrator**. Officer-specific actions (resolving applications) are hidden — that's an Officer task. Go to **Admin Settings** in the sidebar to edit the required-documents checklist.")
 
 # --- Queue ---
 
@@ -110,12 +116,13 @@ for application in filtered:
         st.write(f"**Recommendation shown to citizen:** {detail['recommendation']}")
 
         if detail["status"] != "resolved":
-            if st.button("Mark as reviewed / resolved", key=f"resolve_{detail['id']}"):
-                requests.post(
-                    f"{API_BASE_URL}/api/applications/{detail['id']}/resolve",
-                    json={"officer_name": st.session_state.officer_name},
-                    timeout=15,
-                )
-                st.rerun()
+            if st.session_state.staff_role == "Officer":
+                if st.button("Mark as reviewed / resolved", key=f"resolve_{detail['id']}"):
+                    requests.post(
+                        f"{API_BASE_URL}/api/applications/{detail['id']}/resolve",
+                        json={"officer_name": st.session_state.officer_name},
+                        timeout=15,
+                    )
+                    st.rerun()
         else:
             st.caption(f"Resolved{' by ' + detail['resolved_by'] if detail.get('resolved_by') else ''}")

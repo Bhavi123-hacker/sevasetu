@@ -9,6 +9,8 @@ services:
       - sevasetu_data:/app/data
     environment:
       - DATABASE_URL=sqlite:///./data/sevasetu.db
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2:1b
     restart: unless-stopped
 
   frontend:
@@ -24,5 +26,18 @@ services:
       - backend
     restart: unless-stopped
 
+  # Optional. The backend works without this — /api/ask falls back to
+  # retrieval-only if it's not running or the model hasn't been pulled
+  # yet. Start it, then run the one-time pull command in the README
+  # before expecting generated answers.
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+
 volumes:
   sevasetu_data:
+  ollama_models:
