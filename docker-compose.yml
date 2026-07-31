@@ -11,6 +11,8 @@ services:
       - DATABASE_URL=sqlite:///./data/sevasetu.db
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=llama3.2:1b
+      - JWT_SECRET_KEY=dev-only-secret-change-before-any-real-deployment
+      - OFFICER_DEMO_PASSWORD=seva123
     restart: unless-stopped
 
   frontend:

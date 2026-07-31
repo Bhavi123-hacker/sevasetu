@@ -1,7 +1,7 @@
 import requests
 import streamlit as st
 
-from config import API_BASE_URL
+from config import API_BASE_URL, auth_headers
 
 st.set_page_config(page_title="SevaSetu — Officer Dashboard", page_icon="📊", layout="wide")
 
@@ -13,8 +13,8 @@ st.title("Officer Dashboard")
 st.caption(f"Logged in as {st.session_state.officer_name}")
 
 try:
-    stats = requests.get(f"{API_BASE_URL}/api/officer-stats", timeout=15).json()
-    feedback = requests.get(f"{API_BASE_URL}/api/feedback", timeout=15).json()
+    stats = requests.get(f"{API_BASE_URL}/api/officer-stats", headers=auth_headers(), timeout=15).json()
+    feedback = requests.get(f"{API_BASE_URL}/api/feedback", headers=auth_headers(), timeout=15).json()
 except requests.RequestException as e:
     st.error(f"Couldn't reach SevaSetu's backend: {e}")
     st.stop()

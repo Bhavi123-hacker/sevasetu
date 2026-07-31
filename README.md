@@ -58,7 +58,7 @@ A future where no citizen is turned away at a government office because of a mis
 - **OCR default is Tesseract** — offline, free, no account required. Google Cloud Vision is an optional swap for higher accuracy on messier scans; it requires linking a billing account under GCP's free tier (1,000 units/month, no charge under that limit), which is a setup step, not a real cost.
 - **Bhashini (free, government-run) powers the plain-language / multilingual explanation layer.** This is the one component that calls an external API at runtime; the core OCR → consistency → readiness pipeline runs fully offline.
 - **Out of scope for this MVP** (documented here, not built): feedback sentiment analysis, an officer productivity/analytics dashboard, and learned/ML-based multilingual name matching. These are real ideas for a Phase 2, not abandoned — they're deliberately excluded so the MVP can be executed well rather than partially.
-- **Frontend is Streamlit, not React/Next.js, and there's no JWT auth** — a demo password gate stands in for real authentication. This is a real, open gap against the full architecture diagram, not an oversight: porting the working Streamlit app (6 pages, file uploads, live charts) to React with real token-based auth is a substantially larger task than everything else in this list combined, and hasn't been started.
+- **Frontend is Streamlit, not React/Next.js.** Auth is real now — a genuine backend-issued, signed JWT, verified on every protected route, not a client-side flag — but it's still one shared demo password per role (`OFFICER_DEMO_PASSWORD`), not individual hashed passwords in a database. The remaining gap against the diagram is specifically the frontend framework: porting 6 working Streamlit pages to React is a substantially larger task than everything else in this list combined, and is being done incrementally, one page at a time, not in a single pass.
 
 ## Architecture
 
@@ -98,6 +98,7 @@ The three flows share the same backend, database, and officer-facing surface, bu
 | Feedback sentiment | VADER (`vaderSentiment`) | Rule-based, local, zero API — built for exactly this kind of short informal text |
 | Explanation layer | Bhashini API | Free, government-run, supports Indian languages |
 | Containerization | Docker + Docker Compose | One command to build and run locally |
+| Staff authentication | PyJWT, `HS256` signed tokens | Real backend-issued, expiring, verified tokens — protects officer/admin routes; citizen-facing routes stay open by design |
 
 **On the free-tier constraint:** ChromaDB's default embedding function downloads an ~80MB model from the internet the first time it runs — that surfaced as a real failure in a network-restricted sandbox while building this, not a hypothetical concern. Supplying TF-IDF vectors directly instead avoids that download entirely, alongside avoiding any per-query API cost.
 

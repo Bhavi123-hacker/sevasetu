@@ -35,6 +35,7 @@ from .pipeline.scoring import compute_readiness
 from .pipeline.rag import index_corpus, answer_question
 from .pipeline.sentiment import analyze_sentiment
 from .pipeline.generation import generate_answer
+from .auth import create_access_token, get_current_staff_user, require_role, STAFF_DEMO_PASSWORD
 
 Base.metadata.create_all(bind=engine)
 index_corpus()  # idempotent — indexes the regulation corpus once, no-ops if already indexed
@@ -57,6 +58,34 @@ def root():
 @app.get("/api/health")
 def health():
     return {"status": "ok", "service": "sevasetu-api"}
+
+
+# ---------- Staff authentication ----------
+
+class LoginRequest(BaseModel):
+    name: str
+    role: str  # "Officer" | "Administrator"
+    password: str
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    name: str
+    role: str
+
+
+@app.post("/api/auth/login", response_model=LoginResponse)
+def login(payload: LoginRequest):
+    if payload.role not in ("Officer", "Administrator"):
+        raise HTTPException(status_code=422, detail="role must be 'Officer' or 'Administrator'")
+    if not payload.name.strip():
+        raise HTTPException(status_code=422, detail="name is required")
+    if payload.password != STAFF_DEMO_PASSWORD:
+        raise HTTPException(status_code=401, detail="Incorrect password")
+
+    token = create_access_token(name=payload.name.strip(), role=payload.role)
+    return LoginResponse(access_token=token, name=payload.name.strip(), role=payload.role)
 
 
 class FieldCheckOut(BaseModel):
@@ -154,7 +183,7 @@ async def submit_application(request: Request, db: Session = Depends(get_db)):
 
 
 @app.get("/api/applications")
-def list_applications(db: Session = Depends(get_db)):
+def list_applications(db: Session = Depends(get_db), _user: dict = Depends(get_current_staff_user)):
     apps = db.query(models.Application).order_by(models.Application.readiness_score.asc()).all()
     return [
         {
@@ -197,17 +226,15 @@ def get_application(application_id: str, db: Session = Depends(get_db)):
     }
 
 
-class ResolveRequest(BaseModel):
-    officer_name: Optional[str] = None
-
-
 @app.post("/api/applications/{application_id}/resolve")
-def resolve_application(application_id: str, payload: ResolveRequest, db: Session = Depends(get_db)):
+def resolve_application(
+    application_id: str, db: Session = Depends(get_db), user: dict = Depends(require_role("Officer"))
+):
     application = db.query(models.Application).filter(models.Application.id == application_id).first()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     application.status = "resolved"
-    application.resolved_by = payload.officer_name
+    application.resolved_by = user["name"]  # from the verified token, not a client-supplied field
     application.resolved_at = datetime.now(timezone.utc)
     db.commit()
     return {"id": application_id, "status": "resolved"}
@@ -286,7 +313,7 @@ def submit_feedback(payload: FeedbackRequest, db: Session = Depends(get_db)):
 
 
 @app.get("/api/feedback")
-def list_feedback(db: Session = Depends(get_db)):
+def list_feedback(db: Session = Depends(get_db), _user: dict = Depends(get_current_staff_user)):
     rows = db.query(models.Feedback).order_by(models.Feedback.created_at.desc()).all()
     return [
         {
@@ -307,7 +334,7 @@ def list_feedback(db: Session = Depends(get_db)):
 # project's "explainable over black-box" choice.
 
 @app.get("/api/officer-stats")
-def officer_stats(db: Session = Depends(get_db)):
+def officer_stats(db: Session = Depends(get_db), _user: dict = Depends(get_current_staff_user)):
     applications = db.query(models.Application).all()
     feedback = db.query(models.Feedback).all()
 
@@ -347,7 +374,7 @@ def officer_stats(db: Session = Depends(get_db)):
 # against. Same distinction the architecture diagram draws.
 
 @app.get("/api/service-requirements")
-def get_service_requirements(db: Session = Depends(get_db)):
+def get_service_requirements(db: Session = Depends(get_db), _user: dict = Depends(get_current_staff_user)):
     rows = db.query(models.RequiredDocument).all()
     result: dict = {}
     for row in rows:
@@ -361,7 +388,10 @@ class UpdateRequirementsRequest(BaseModel):
 
 @app.put("/api/service-requirements/{service_type}")
 def update_service_requirements(
-    service_type: str, payload: UpdateRequirementsRequest, db: Session = Depends(get_db)
+    service_type: str,
+    payload: UpdateRequirementsRequest,
+    db: Session = Depends(get_db),
+    _user: dict = Depends(require_role("Administrator")),
 ):
     db.query(models.RequiredDocument).filter(
         models.RequiredDocument.service_type == service_type

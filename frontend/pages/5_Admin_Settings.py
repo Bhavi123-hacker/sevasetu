@@ -1,7 +1,7 @@
 import requests
 import streamlit as st
 
-from config import API_BASE_URL, SERVICE_TYPES
+from config import API_BASE_URL, SERVICE_TYPES, auth_headers
 
 st.set_page_config(page_title="SevaSetu — Admin Settings", page_icon="⚙️")
 
@@ -18,7 +18,7 @@ st.caption(f"Logged in as {st.session_state.officer_name} (Administrator)")
 st.write("Edit which documents are required per service. Changes apply immediately — the next citizen who submits an application is checked against whatever's saved here, not a hardcoded list.")
 
 try:
-    current = requests.get(f"{API_BASE_URL}/api/service-requirements", timeout=15).json()
+    current = requests.get(f"{API_BASE_URL}/api/service-requirements", headers=auth_headers(), timeout=15).json()
 except requests.RequestException as e:
     st.error(f"Couldn't reach SevaSetu's backend: {e}")
     st.stop()
@@ -42,6 +42,7 @@ for service_key, service_info in SERVICE_TYPES.items():
             r = requests.put(
                 f"{API_BASE_URL}/api/service-requirements/{service_key}",
                 json={"document_types": selected},
+                headers=auth_headers(),
                 timeout=15,
             )
             r.raise_for_status()
