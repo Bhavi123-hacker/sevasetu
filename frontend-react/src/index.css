@@ -1,0 +1,200 @@
+:root {
+  /* A government-services tool needs to read as trustworthy and calm,
+     not as a bold brand statement — deliberately restrained, not a
+     missed opportunity. Deep teal reads as institutional-but-modern
+     without tipping into either corporate-blue cliche or the
+     cream+terracotta/near-black+neon defaults. */
+  --color-bg: #f7f8f7;
+  --color-surface: #ffffff;
+  --color-ink: #1c2624;
+  --color-ink-muted: #5b6764;
+  --color-primary: #0f5c56;
+  --color-primary-hover: #0b4741;
+  --color-border: #dde3e1;
+
+  --color-success-bg: #e7f4ea;
+  --color-success-text: #1e6b34;
+  --color-warning-bg: #fdf1e2;
+  --color-warning-text: #92590a;
+  --color-danger-bg: #fbe9e8;
+  --color-danger-text: #a02e26;
+
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Consolas, monospace;
+
+  --radius: 8px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 40px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  line-height: 1.5;
+}
+
+h1, h2, h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  padding: var(--space-3);
+}
+
+.sidebar h1 {
+  font-size: 20px;
+  margin: 0 0 var(--space-4);
+}
+
+.sidebar nav a {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  color: var(--color-ink-muted);
+  text-decoration: none;
+  font-size: 14px;
+  margin-bottom: var(--space-1);
+}
+
+.sidebar nav a:hover {
+  background: var(--color-bg);
+}
+
+.sidebar nav a.active {
+  background: var(--color-primary);
+  color: white;
+}
+
+.main-content {
+  flex: 1;
+  padding: var(--space-5);
+  max-width: 720px;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.field {
+  margin-bottom: var(--space-3);
+}
+
+.field label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: var(--space-1);
+}
+
+.field input[type="text"],
+.field input[type="password"],
+.field select,
+.field textarea {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.btn {
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-4);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--color-primary-hover);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.status-banner {
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  margin-bottom: var(--space-3);
+  font-size: 14px;
+}
+
+.status-banner.success { background: var(--color-success-bg); color: var(--color-success-text); }
+.status-banner.warning { background: var(--color-warning-bg); color: var(--color-warning-text); }
+.status-banner.danger { background: var(--color-danger-bg); color: var(--color-danger-text); }
+
+.readiness-score {
+  font-size: 48px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.check-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.check-row:last-child {
+  border-bottom: none;
+}
+
+.check-icon.pass { color: var(--color-success-text); }
+.check-icon.fail { color: var(--color-danger-text); }
+
+@media (max-width: 640px) {
+  .app-shell { flex-direction: column; }
+  .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--color-border); }
+  .main-content { padding: var(--space-3); }
+}

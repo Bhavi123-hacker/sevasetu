@@ -28,6 +28,26 @@ services:
       - backend
     restart: unless-stopped
 
+  # React port, in progress — 1 of 6 pages migrated (citizen upload +
+  # result). The other 5 still only exist in the Streamlit `frontend`
+  # service above; this runs alongside it, not instead of it, until the
+  # migration is finished. VITE_API_BASE_URL is deliberately
+  # http://localhost:8000, not http://backend:8000 — this gets baked
+  # into the JS bundle at build time and is called from the user's
+  # browser, which is outside the Docker network and doesn't know what
+  # "backend" resolves to.
+  frontend-react:
+    build:
+      context: ./frontend-react
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
   # Optional. The backend works without this — /api/ask falls back to
   # retrieval-only if it's not running or the model hasn't been pulled
   # yet. Start it, then run the one-time pull command in the README
