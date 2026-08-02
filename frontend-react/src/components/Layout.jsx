@@ -5,7 +5,9 @@ const NAV_ITEMS = [
   { to: '/status', label: 'Check Status' },
   { to: '/ask', label: 'Ask a Question' },
   { to: '/feedback', label: 'Feedback' },
-  { to: '/staff', label: 'Officer / Admin' },
+  { to: '/officer-queue', label: 'Officer Queue' },
+  { to: '/officer-dashboard', label: 'Officer Dashboard' },
+  { to: '/admin-settings', label: 'Admin Settings' },
 ]
 
 export default function Layout({ children }) {

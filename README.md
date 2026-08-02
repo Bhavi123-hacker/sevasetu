@@ -58,7 +58,7 @@ A future where no citizen is turned away at a government office because of a mis
 - **OCR default is Tesseract** — offline, free, no account required. Google Cloud Vision is an optional swap for higher accuracy on messier scans; it requires linking a billing account under GCP's free tier (1,000 units/month, no charge under that limit), which is a setup step, not a real cost.
 - **Bhashini (free, government-run) powers the plain-language / multilingual explanation layer.** This is the one component that calls an external API at runtime; the core OCR → consistency → readiness pipeline runs fully offline.
 - **Out of scope for this MVP** (documented here, not built): feedback sentiment analysis, an officer productivity/analytics dashboard, and learned/ML-based multilingual name matching. These are real ideas for a Phase 2, not abandoned — they're deliberately excluded so the MVP can be executed well rather than partially.
-- **Frontend migration to React is in progress, not finished.** 1 of 6 pages (citizen upload + readiness result) is ported, tested (5 component tests, including a full mocked submit-to-result flow), and builds cleanly. The other 5 — status check, ask a question, feedback, officer queue, admin settings — are still Streamlit-only. Both frontends run side by side against the same backend during the migration; nothing is broken or half-working, there's just less built in React than in Streamlit right now.
+- **Frontend is React only now.** All 7 pages ported and tested (21 component tests total — form validation, real multipart submission, role-gated access checked both directions, the resolve/checklist-edit flows). The original Streamlit app still exists in `frontend/` as reference — it's not deleted — but `docker compose up` no longer runs it; `frontend-react/` is what's actually deployed.
 
 ## Architecture
 
@@ -90,8 +90,7 @@ The three flows share the same backend, database, and officer-facing surface, bu
 | Layer | Choice | Why |
 |---|---|---|
 | Backend | FastAPI (Python) | Async-friendly, auto-generated OpenAPI docs at `/docs` |
-| Frontend (primary, 5/6 pages) | Streamlit | Fast to build and test; still the complete app |
-| Frontend (in progress, 1/6 pages) | React + Vite | Matches the architecture diagram's stated choice; Vite over Next.js since this is a client-side SPA with no need for server rendering |
+| Frontend | React + Vite | Matches the architecture diagram's stated choice; Vite over Next.js since this is a client-side SPA with no need for server rendering. (Streamlit remains in `frontend/` as the original reference build, not part of the deployed stack.) |
 | Database | SQLite via SQLAlchemy | Zero external dependency for the MVP; swappable for Postgres later |
 | OCR | Tesseract (default) / Google Cloud Vision (optional) | Free and offline by default |
 | Consistency matching | `rapidfuzz` | Same library reused for both the consistency engine and duplicate-application detection |
@@ -144,9 +143,7 @@ docker compose up --build
 
 Once it's running:
 
-- **Citizen app (Streamlit):** [http://localhost:8501](http://localhost:8501) — select a service, upload documents, get a readiness score
-- **Officer / Administrator staff area:** the "Officer Queue" page in the same app's sidebar — demo login password is `seva123` (set via `OFFICER_DEMO_PASSWORD`; real JWT auth now, still one shared demo password per role rather than individual accounts). Choose your role (Officer or Administrator) at login.
-- **React citizen app (in progress):** [http://localhost:3000](http://localhost:3000) — the citizen upload + readiness result flow, ported and tested. The other 5 pages (status check, ask a question, feedback, officer queue, admin settings) aren't ported yet and only exist in the Streamlit app above — this runs *alongside* Streamlit, not instead of it, until the migration finishes.
+- **Citizen app + staff area (React):** [http://localhost:3000](http://localhost:3000) — all 7 pages: apply, check status, ask a question, feedback, officer queue, officer dashboard, admin settings. Staff login uses the same demo password (`seva123`) and role selector (Officer / Administrator) as before, now issuing a real JWT instead of a client-side flag.
 - **API landing page:** [http://localhost:8000](http://localhost:8000)
 - **Health check:** [http://localhost:8000/api/health](http://localhost:8000/api/health)
 - **Interactive API docs (Swagger UI):** [http://localhost:8000/docs](http://localhost:8000/docs)
@@ -183,10 +180,12 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 
 # frontend, in a second terminal
-cd frontend
-pip install -r requirements.txt
-streamlit run app.py
+cd frontend-react
+npm install
+npm run dev
 ```
+
+The old Streamlit app still runs too, if you want it: `cd frontend && pip install -r requirements.txt && streamlit run app.py`. It's not part of the Docker stack anymore, but the code hasn't been deleted.
 
 ## Local Development Tools
 
@@ -198,7 +197,8 @@ streamlit run app.py
 | `rapidfuzz` | Fuzzy string matching for the consistency engine and duplicate check |
 | `pytesseract` + system `tesseract-ocr` | OCR extraction from uploaded document images |
 | SQLite | Local, file-based database — no separate DB server to install |
-| Streamlit | Frontend for both the citizen upload flow and the officer queue |
+| Node.js 20 + npm | Builds and runs the React frontend |
+| Streamlit *(legacy, optional)* | Original reference frontend — not part of the Docker stack, kept for comparison |
 | GitHub CLI (`gh`) *(optional)* | Used by `scripts/create_github_issues.sh` to bulk-create the 25 user stories as GitHub Issues |
 
 ## Repository Structure
@@ -229,32 +229,27 @@ sevasetu-starter/
 │       │   └── sentiment.py      # VADER sentiment analysis, fully local
 │       └── static/
 │           └── index.html
-├── frontend/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── config.py                  # API URL + service/document definitions
-│   ├── app.py                     # Citizen flow: upload + readiness result
-│   └── pages/
-│       ├── 1_Officer_Queue.py     # Staff login (Officer/Administrator), queue, per-application detail
-│       ├── 2_Ask_A_Question.py    # Citizen regulation Q&A
-│       ├── 3_Feedback.py          # Citizen feedback submission
-│       ├── 4_Officer_Dashboard.py # Productivity stats + feedback insights
-│       ├── 5_Admin_Settings.py    # Administrator-only: edit required-documents checklist
-│       └── 6_Check_Status.py      # Citizen: look up a submitted application by ID
-├── frontend-react/                 # React port, in progress — see README note above
+├── frontend-react/                 # The deployed frontend — all 7 pages, React + Vite
 │   ├── Dockerfile
 │   ├── package.json
 │   └── src/
-│       ├── App.jsx                 # Routing — ported pages plus honest "not yet" placeholders
+│       ├── App.jsx                       # Routing for all 7 pages
 │       ├── main.jsx
-│       ├── index.css                # Design tokens — civic-trust palette, not a generic template
-│       ├── config.js                # Mirrors frontend/config.py's SERVICE_TYPES
-│       ├── api/client.js            # Axios instance, auto-attaches the staff JWT when present
-│       ├── context/AuthContext.jsx  # Login state, persisted to localStorage
-│       ├── components/Layout.jsx    # Sidebar nav, mirrors the Streamlit page list
-│       ├── pages/CitizenUpload.jsx  # Ported: upload flow + readiness result. Tested.
-│       ├── pages/ComingSoon.jsx     # Placeholder for the 5 not-yet-ported pages
-│       └── tests/CitizenUpload.test.jsx  # 5 tests: validation, multipart submit, real response rendering, error handling
+│       ├── index.css                     # Design tokens — civic-trust palette, not a generic template
+│       ├── config.js                     # Mirrors the old Streamlit config.py's SERVICE_TYPES
+│       ├── api/client.js                 # Axios instance, auto-attaches the staff JWT when present
+│       ├── context/AuthContext.jsx       # Login state, persisted to localStorage
+│       ├── components/Layout.jsx         # Sidebar nav
+│       ├── components/StaffGate.jsx      # Shared login + role gate for the 3 staff pages
+│       ├── pages/CitizenUpload.jsx       # Apply: upload flow + readiness result
+│       ├── pages/CheckStatus.jsx         # Citizen: look up a submitted application by ID
+│       ├── pages/AskQuestion.jsx         # Citizen: regulation Q&A
+│       ├── pages/Feedback.jsx            # Citizen: feedback submission
+│       ├── pages/OfficerQueue.jsx        # Officer: queue, filter/search, resolve
+│       ├── pages/OfficerDashboard.jsx    # Officer/Admin: productivity + feedback insights
+│       ├── pages/AdminSettings.jsx       # Administrator-only: edit required-documents checklist
+│       └── tests/                        # 21 tests across 5 files — validation, real API calls, role gating both directions, error handling
+├── frontend/                       # Legacy Streamlit build — not deleted, not deployed. Same 7 pages, kept for reference/comparison.
 ├── docs/
 │   ├── user_stories_moscow.md
 │   └── wireframes_spec.md

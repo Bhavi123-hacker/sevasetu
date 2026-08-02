@@ -15,28 +15,14 @@ services:
       - OFFICER_DEMO_PASSWORD=seva123
     restart: unless-stopped
 
+  # React is now the only active frontend — full feature parity with
+  # the old Streamlit app across all 7 pages, tested (21 component
+  # tests, see frontend-react/src/tests/). The Streamlit code is still
+  # in frontend/ but deliberately not run by this file anymore.
+  # VITE_API_BASE_URL is http://localhost:8000, not http://backend:8000
+  # — this gets baked into the JS bundle at build time and is called
+  # from the user's browser, which is outside the Docker network.
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "8501:8501"
-    environment:
-      - API_BASE_URL=http://backend:8000
-      - OFFICER_DEMO_PASSWORD=seva123
-    depends_on:
-      - backend
-    restart: unless-stopped
-
-  # React port, in progress — 1 of 6 pages migrated (citizen upload +
-  # result). The other 5 still only exist in the Streamlit `frontend`
-  # service above; this runs alongside it, not instead of it, until the
-  # migration is finished. VITE_API_BASE_URL is deliberately
-  # http://localhost:8000, not http://backend:8000 — this gets baked
-  # into the JS bundle at build time and is called from the user's
-  # browser, which is outside the Docker network and doesn't know what
-  # "backend" resolves to.
-  frontend-react:
     build:
       context: ./frontend-react
       dockerfile: Dockerfile

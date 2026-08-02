@@ -1,7 +1,12 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import CitizenUpload from './pages/CitizenUpload'
-import ComingSoon from './pages/ComingSoon'
+import CheckStatus from './pages/CheckStatus'
+import AskQuestion from './pages/AskQuestion'
+import Feedback from './pages/Feedback'
+import OfficerQueue from './pages/OfficerQueue'
+import OfficerDashboard from './pages/OfficerDashboard'
+import AdminSettings from './pages/AdminSettings'
 import { AuthProvider } from './context/AuthContext'
 
 export default function App() {
@@ -11,10 +16,12 @@ export default function App() {
         <Layout>
           <Routes>
             <Route path="/" element={<CitizenUpload />} />
-            <Route path="/status" element={<ComingSoon pageName="Check Status" />} />
-            <Route path="/ask" element={<ComingSoon pageName="Ask a Question" />} />
-            <Route path="/feedback" element={<ComingSoon pageName="Feedback" />} />
-            <Route path="/staff" element={<ComingSoon pageName="Officer / Administrator" />} />
+            <Route path="/status" element={<CheckStatus />} />
+            <Route path="/ask" element={<AskQuestion />} />
+            <Route path="/feedback" element={<Feedback />} />
+            <Route path="/officer-queue" element={<OfficerQueue />} />
+            <Route path="/officer-dashboard" element={<OfficerDashboard />} />
+            <Route path="/admin-settings" element={<AdminSettings />} />
           </Routes>
         </Layout>
       </BrowserRouter>
