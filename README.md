@@ -43,6 +43,10 @@ A future where no citizen is turned away at a government office because of a mis
 - Officer productivity dashboard — resolutions per officer, applications by service type, feedback sentiment trends
 - Citizens can look up a submitted application's status later using its ID
 - Administrators can edit the required-documents checklist per service without touching code
+- Readiness score comes with an itemized reasoning breakdown (not just the number)
+- OCR confidence is measured and surfaced, not assumed
+- Full audit trail per application — every pipeline stage logged, not just the final status
+- Downloadable PDF verification report per application
 
 ## Success Metrics
 
@@ -94,14 +98,19 @@ The three flows share the same backend, database, and officer-facing surface, bu
 | Database | SQLite via SQLAlchemy | Zero external dependency for the MVP; swappable for Postgres later |
 | OCR | Tesseract (default) / Google Cloud Vision (optional) | Free and offline by default |
 | Consistency matching | `rapidfuzz` | Same library reused for both the consistency engine and duplicate-application detection |
-| Regulation retrieval | TF-IDF (`scikit-learn`) + ChromaDB | No downloaded model, no API call, no rate limit to ever hit — see note below |
+| Regulation retrieval | Hybrid: BM25 + TF-IDF (`scikit-learn`) via ChromaDB, fused with Reciprocal Rank Fusion | No downloaded model, no API call, no rate limit — see note below on what "hybrid" does and doesn't mean here |
 | Answer generation (optional) | Ollama, local model (`llama3.2:1b` default) | Generates a natural-language answer on top of the retrieved passage. Free, no key, no signup — the tradeoff for that is real local compute, not a hosted API's SLA |
 | Feedback sentiment | VADER (`vaderSentiment`) | Rule-based, local, zero API — built for exactly this kind of short informal text |
+| Verification reports | ReportLab (PDF) | Generated on request, not stored — cheap enough to regenerate, so it's never stale |
+| Testing | pytest (backend, 20 tests) + Vitest (frontend, 21 tests) | Real, repeatable regression suites, not just ad-hoc manual verification |
+| CI | GitHub Actions | Backend tests, frontend tests + build, and both Docker images, on every push |
 | Explanation layer | Bhashini API | Free, government-run, supports Indian languages |
 | Containerization | Docker + Docker Compose | One command to build and run locally |
 | Staff authentication | PyJWT, `HS256` signed tokens | Real backend-issued, expiring, verified tokens — protects officer/admin routes; citizen-facing routes stay open by design |
 
 **On the free-tier constraint:** ChromaDB's default embedding function downloads an ~80MB model from the internet the first time it runs — that surfaced as a real failure in a network-restricted sandbox while building this, not a hypothetical concern. Supplying TF-IDF vectors directly instead avoids that download entirely, alongside avoiding any per-query API cost.
+
+**On "hybrid retrieval" specifically:** BM25 and TF-IDF are both lexical (keyword-overlap) methods — this is not a lexical+semantic hybrid, whatever the term "hybrid" might suggest elsewhere. A true semantic layer would need embeddings from a downloaded transformer model, which runs into the same network restriction described above. Fusing BM25 with TF-IDF via Reciprocal Rank Fusion is still a real, worthwhile improvement — BM25 generally outperforms raw TF-IDF, and RRF is the actual standard fusion technique — it just isn't the "lexical + semantic" story that phrase sometimes implies. Building this surfaced a genuine RRF edge case worth knowing about: when two rankers disagree by an exact swap (one ranks document A first and B second, the other ranks B first and A second), their fused scores come out identical, and the tie gets broken by whichever ranker's results were passed first — not by which ranker is more trustworthy, unless you deliberately order the fusion input to reflect that.
 
 **On the Ollama generation layer specifically:** this is the one piece of this codebase that wasn't run end-to-end before being committed — Ollama needs to download a model from the internet, which was blocked in the sandbox this was built in. It's written against Ollama's stable, documented REST API and designed to fail silently (falls back to showing the retrieved passage) if it's not reachable, but "verify this yourself first" applies here in a way it doesn't for the rest of this project.
 
@@ -187,6 +196,23 @@ npm run dev
 
 The old Streamlit app still runs too, if you want it: `cd frontend && pip install -r requirements.txt && streamlit run app.py`. It's not part of the Docker stack anymore, but the code hasn't been deleted.
 
+## Running Tests
+
+```bash
+# backend — 20 tests, needs the synthetic documents to exist first
+cd backend
+pip install -r requirements.txt
+python -m app.generate_test_documents
+pytest tests/ -v
+
+# frontend — 21 tests
+cd frontend-react
+npm install
+npx vitest run
+```
+
+Both suites also run automatically on every push via GitHub Actions (`.github/workflows/ci.yml`), along with a build of both Docker images.
+
 ## Local Development Tools
 
 | Tool | Purpose |
@@ -224,11 +250,14 @@ sevasetu-starter/
 │       │   ├── checklist.py      # Required-documents lookup per service type
 │       │   ├── duplicates.py     # Fuzzy-matches against past applications
 │       │   ├── scoring.py        # Aggregates everything into one readiness score
-│       │   ├── rag.py            # TF-IDF + ChromaDB retrieval, no API/model download needed
+│       │   ├── rag.py            # Hybrid BM25 + TF-IDF retrieval, fused via RRF — no API/model download needed
 │       │   ├── generation.py     # Optional Ollama generation layer on top of retrieval — untested by me, see note above
-│       │   └── sentiment.py      # VADER sentiment analysis, fully local
+│       │   ├── sentiment.py      # VADER sentiment analysis, fully local
+│       │   └── report.py         # PDF verification report generation (ReportLab)
 │       └── static/
 │           └── index.html
+├── backend/tests/                  # pytest suite — 20 tests, see "Running Tests" below
+├── .github/workflows/ci.yml        # GitHub Actions: backend tests, frontend tests+build, both Docker images
 ├── frontend-react/                 # The deployed frontend — all 7 pages, React + Vite
 │   ├── Dockerfile
 │   ├── package.json

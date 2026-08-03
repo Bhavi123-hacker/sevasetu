@@ -43,6 +43,7 @@ class DocumentRecord(Base):
     application_id = Column(String, index=True, nullable=False)
     doc_type = Column(String, nullable=False)  # e.g. aadhaar, ration_card, electricity_bill
     ocr_text = Column(String, nullable=True)
+    ocr_confidence = Column(Float, nullable=True)  # average word-level confidence, 0-100
 
 
 class FieldMismatch(Base):
@@ -53,6 +54,24 @@ class FieldMismatch(Base):
     field_name = Column(String, nullable=False)  # name | date_of_birth | address
     status = Column(String, nullable=False)  # pass | fail
     detail = Column(String, nullable=True)
+
+
+class AuditEvent(Base):
+    """
+    One row per pipeline stage per application — Uploaded, OCR Completed,
+    Duplicate Check, Consistency Check, Officer Reviewed, Resolved.
+    Append-only by convention (nothing in this codebase updates or
+    deletes a row); that's what makes it a real audit trail rather than
+    just a status field that overwrites itself.
+    """
+    __tablename__ = "audit_events"
+
+    id = Column(String, primary_key=True, index=True)
+    application_id = Column(String, index=True, nullable=False)
+    event_type = Column(String, nullable=False)
+    detail = Column(String, nullable=True)
+    actor = Column(String, nullable=True)  # "system" for pipeline stages, an officer's name for manual actions
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class RequiredDocument(Base):

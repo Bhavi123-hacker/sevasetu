@@ -45,6 +45,11 @@ describe('CitizenUpload', () => {
         citizen_name: 'Rahul Kumar',
         service_type: 'income_certificate',
         readiness_score: 75,
+        score_reasoning: [
+          { points: 100, label: 'Base score (all requirements met)' },
+          { points: -15, label: 'Address mismatch' },
+          { points: -10, label: 'Missing residence proof' },
+        ],
         field_checks: [
           { field: 'name', status: 'pass', detail: 'Matches across documents' },
           { field: 'address', status: 'fail', detail: 'Aadhaar lists "12 MG Road"; Electricity Bill lists "14 MG Road"' },
@@ -53,6 +58,7 @@ describe('CitizenUpload', () => {
         duplicate_suspected: false,
         estimated_delay_days: '3-5',
         recommendation: 'Upload an updated Aadhaar or a matching residence proof before resubmitting.',
+        average_ocr_confidence: 94.8,
       },
     })
 

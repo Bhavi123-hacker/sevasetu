@@ -11,3 +11,6 @@ chromadb>=0.5
 vaderSentiment>=3.3
 requests>=2.31
 pyjwt>=2.8
+rank_bm25>=0.2.2
+reportlab>=4.0
+pytest>=8.0

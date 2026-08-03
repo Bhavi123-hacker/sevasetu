@@ -8,7 +8,7 @@ student can defend in a viva, versus a black-box score nobody (including
 the citizen) can question. A learned/weighted version is a reasonable
 Phase 2 upgrade once there's real usage data to train against.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .consistency import FieldCheckResult
 
@@ -18,10 +18,17 @@ DUPLICATE_PENALTY = 20
 
 
 @dataclass
+class ScoreReason:
+    points: int  # positive or negative
+    label: str
+
+
+@dataclass
 class ReadinessResult:
     score: int
     estimated_delay_days: str
     recommendation: str
+    reasoning: list = field(default_factory=list)  # list[ScoreReason] — same math as `score`, just itemized
 
 
 def _estimate_delay(failed_field_count: int, missing_doc_count: int, duplicate_suspected: bool) -> str:
@@ -61,18 +68,31 @@ def _build_recommendation(
 def compute_readiness(
     field_checks: list[FieldCheckResult], missing_documents: list, duplicate_suspected: bool
 ) -> ReadinessResult:
-    failed_field_count = sum(1 for check in field_checks if check.status == "fail")
-    missing_doc_count = len(missing_documents)
+    reasoning = [ScoreReason(points=100, label="Base score (all requirements met)")]
 
     score = 100
-    score -= failed_field_count * FAILED_FIELD_PENALTY
-    score -= missing_doc_count * MISSING_DOC_PENALTY
+    for check in field_checks:
+        if check.status == "fail":
+            score -= FAILED_FIELD_PENALTY
+            reasoning.append(ScoreReason(points=-FAILED_FIELD_PENALTY, label=f"{check.field.replace('_', ' ').title()} mismatch"))
+        else:
+            reasoning.append(ScoreReason(points=0, label=f"{check.field.replace('_', ' ').title()} verified consistent"))
+
+    for doc in missing_documents:
+        score -= MISSING_DOC_PENALTY
+        reasoning.append(ScoreReason(points=-MISSING_DOC_PENALTY, label=f"Missing {doc.replace('_', ' ')}"))
+
     if duplicate_suspected:
         score -= DUPLICATE_PENALTY
+        reasoning.append(ScoreReason(points=-DUPLICATE_PENALTY, label="Possible duplicate application"))
+
     score = max(score, 0)
+    failed_field_count = sum(1 for check in field_checks if check.status == "fail")
+    missing_doc_count = len(missing_documents)
 
     return ReadinessResult(
         score=score,
         estimated_delay_days=_estimate_delay(failed_field_count, missing_doc_count, duplicate_suspected),
         recommendation=_build_recommendation(field_checks, missing_documents, duplicate_suspected),
+        reasoning=reasoning,
     )

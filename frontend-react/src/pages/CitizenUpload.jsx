@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import client from '../api/client'
+import { API_BASE_URL } from '../api/client'
 import { SERVICE_TYPES } from '../config'
 
 export default function CitizenUpload() {
@@ -143,6 +144,28 @@ function ReadinessResult({ result, onStartNew }) {
           {SERVICE_TYPES[result.service_type]?.label || result.service_type} application for {result.citizen_name}
         </p>
 
+        <details style={{ margin: '8px 0' }}>
+          <summary style={{ cursor: 'pointer', fontSize: 14, color: 'var(--color-primary)' }}>Why this score?</summary>
+          <div style={{ marginTop: 8 }}>
+            {result.score_reasoning.map((reason, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, fontSize: 14, padding: '2px 0' }}>
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  color: reason.points > 0 ? 'var(--color-success-text)' : reason.points < 0 ? 'var(--color-danger-text)' : 'var(--color-ink-muted)',
+                  minWidth: 40,
+                }}>
+                  {reason.points > 0 ? '+' : ''}{reason.points}
+                </span>
+                <span>{reason.label}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+
+        <p style={{ fontSize: 13, color: 'var(--color-ink-muted)' }}>
+          OCR confidence: {result.average_ocr_confidence}%
+        </p>
+
         {result.duplicate_suspected && (
           <div className="status-banner warning">This looks like a repeat submission of an existing application.</div>
         )}
@@ -184,7 +207,16 @@ function ReadinessResult({ result, onStartNew }) {
         </div>
       </div>
 
-      <button className="btn btn-secondary" onClick={onStartNew}>Start a new application</button>
+      <div style={{ display: 'flex', gap: 12 }}>
+        <a
+          className="btn"
+          href={`${API_BASE_URL}/api/applications/${result.application_id}/report.pdf`}
+          download
+        >
+          Download report (PDF)
+        </a>
+        <button className="btn btn-secondary" onClick={onStartNew}>Start a new application</button>
+      </div>
     </div>
   )
 }

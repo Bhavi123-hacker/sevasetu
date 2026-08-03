@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import client from '../api/client'
+import { API_BASE_URL } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import StaffGate from '../components/StaffGate'
 import { SERVICE_TYPES } from '../config'
@@ -13,6 +14,7 @@ function OfficerQueueContent() {
   const [showResolved, setShowResolved] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
   const [detailCache, setDetailCache] = useState({})
+  const [auditCache, setAuditCache] = useState({})
 
   const loadApplications = useCallback(async () => {
     try {
@@ -34,6 +36,10 @@ function OfficerQueueContent() {
     if (!detailCache[id]) {
       const response = await client.get(`/api/applications/${id}`)
       setDetailCache((prev) => ({ ...prev, [id]: response.data }))
+    }
+    if (!auditCache[id]) {
+      const auditResponse = await client.get(`/api/applications/${id}/audit`)
+      setAuditCache((prev) => ({ ...prev, [id]: auditResponse.data }))
     }
   }
 
@@ -117,6 +123,16 @@ function OfficerQueueContent() {
             {expandedId === app.id && detail && (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
                 <p><strong>Application ID:</strong> {detail.id} | <strong>Status:</strong> {detail.status}</p>
+                <p><strong>OCR confidence:</strong> {detail.average_ocr_confidence}%</p>
+
+                <p style={{ marginBottom: 4 }}><strong>Score breakdown:</strong></p>
+                {detail.score_reasoning.map((reason, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 13 }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', minWidth: 36 }}>{reason.points > 0 ? '+' : ''}{reason.points}</span>
+                    <span>{reason.label}</span>
+                  </div>
+                ))}
+
                 {detail.field_checks.map((check) => (
                   <div className="check-row" key={check.field}>
                     <span className={`check-icon ${check.status}`}>{check.status === 'pass' ? '\u2713' : '\u2717'}</span>
@@ -128,6 +144,27 @@ function OfficerQueueContent() {
                 )}
                 <p><strong>Estimated delay:</strong> {detail.estimated_delay_days} days</p>
                 <p><strong>Recommendation shown to citizen:</strong> {detail.recommendation}</p>
+
+                {auditCache[app.id] && (
+                  <>
+                    <p style={{ marginBottom: 4 }}><strong>Processing timeline:</strong></p>
+                    {auditCache[app.id].map((event, i) => (
+                      <div key={i} style={{ fontSize: 13, color: 'var(--color-ink-muted)' }}>
+                        {event.created_at?.slice(11, 19)} — {event.event_type}{event.detail ? ` (${event.detail})` : ''}
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                <a
+                  className="btn btn-secondary"
+                  style={{ display: 'inline-block', marginTop: 12, marginRight: 8, textDecoration: 'none' }}
+                  href={`${API_BASE_URL}/api/applications/${app.id}/report.pdf`}
+                  download
+                >
+                  Download report (PDF)
+                </a>
+
                 {detail.status !== 'resolved' ? (
                   staffUser.role === 'Officer' && (
                     <button className="btn" onClick={() => handleResolve(app.id)}>Mark as reviewed / resolved</button>

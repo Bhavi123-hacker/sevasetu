@@ -19,22 +19,23 @@ from typing import List, Optional
 
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 from PIL import Image
 from sqlalchemy.orm import Session
 
 from .database import engine, Base, get_db, SessionLocal
 from . import models
-from .pipeline.ocr import extract_text_from_image
+from .pipeline.ocr import extract_text_from_image, extract_confidence_from_image
 from .pipeline.extraction import extract_fields
-from .pipeline.consistency import run_consistency_check
+from .pipeline.consistency import run_consistency_check, FieldCheckResult
 from .pipeline.checklist import find_missing_documents, seed_defaults_if_empty
 from .pipeline.duplicates import find_probable_duplicate
 from .pipeline.scoring import compute_readiness
 from .pipeline.rag import index_corpus, answer_question
 from .pipeline.sentiment import analyze_sentiment
 from .pipeline.generation import generate_answer
+from .pipeline.report import build_report_pdf
 from .auth import create_access_token, get_current_staff_user, require_role, STAFF_DEMO_PASSWORD
 
 Base.metadata.create_all(bind=engine)
@@ -94,16 +95,33 @@ class FieldCheckOut(BaseModel):
     detail: str
 
 
+class ScoreReasonOut(BaseModel):
+    points: int
+    label: str
+
+
 class ReadinessResponse(BaseModel):
     application_id: str
     citizen_name: str
     service_type: str
     readiness_score: int
+    score_reasoning: List[ScoreReasonOut]
     field_checks: List[FieldCheckOut]
     missing_documents: List[str]
     duplicate_suspected: bool
     estimated_delay_days: str
     recommendation: str
+    average_ocr_confidence: float
+
+
+def _log_audit(db: Session, application_id: str, event_type: str, detail: str = None, actor: str = "system"):
+    db.add(models.AuditEvent(
+        id=str(uuid.uuid4())[:8],
+        application_id=application_id,
+        event_type=event_type,
+        detail=detail,
+        actor=actor,
+    ))
 
 
 @app.post("/api/applications", response_model=ReadinessResponse)
@@ -122,12 +140,17 @@ async def submit_application(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=422, detail="At least one document must be uploaded")
 
     application_id = str(uuid.uuid4())[:8]
+    _log_audit(db, application_id, "Uploaded", detail=f"{len(uploaded_docs)} document(s): {', '.join(uploaded_docs.keys())}")
+
     fields_by_doc = {}
+    confidences = []
 
     for doc_type, upload in uploaded_docs.items():
         raw_bytes = await upload.read()
         image = Image.open(io.BytesIO(raw_bytes))
         ocr_text = extract_text_from_image(image)
+        confidence = extract_confidence_from_image(image)
+        confidences.append(confidence)
         fields_by_doc[doc_type] = extract_fields(ocr_text)
 
         db.add(models.DocumentRecord(
@@ -135,9 +158,16 @@ async def submit_application(request: Request, db: Session = Depends(get_db)):
             application_id=application_id,
             doc_type=doc_type,
             ocr_text=ocr_text,
+            ocr_confidence=confidence,
         ))
 
+    average_confidence = round(sum(confidences) / len(confidences), 1) if confidences else 0.0
+    _log_audit(db, application_id, "OCR Completed", detail=f"Average confidence {average_confidence}%")
+
     field_checks = run_consistency_check(fields_by_doc)
+    _log_audit(db, application_id, "Consistency Check Completed",
+               detail=f"{sum(1 for c in field_checks if c.status == 'fail')} mismatch(es) found")
+
     missing_documents = find_missing_documents(db, service_type, list(uploaded_docs.keys()))
 
     existing = db.query(models.Application).filter(
@@ -146,8 +176,11 @@ async def submit_application(request: Request, db: Session = Depends(get_db)):
     existing_dicts = [{"id": a.id, "citizen_name": a.citizen_name, "service_type": a.service_type} for a in existing]
     duplicate = find_probable_duplicate(citizen_name, service_type, existing_dicts)
     duplicate_suspected = bool(duplicate)
+    _log_audit(db, application_id, "Duplicate Check Completed",
+               detail="Possible duplicate found" if duplicate_suspected else "No duplicate found")
 
     readiness = compute_readiness(field_checks, missing_documents, duplicate_suspected)
+    _log_audit(db, application_id, "Readiness Scored", detail=f"Score: {readiness.score}%")
 
     db.add(models.Application(
         id=application_id,
@@ -174,11 +207,13 @@ async def submit_application(request: Request, db: Session = Depends(get_db)):
         citizen_name=citizen_name,
         service_type=service_type,
         readiness_score=readiness.score,
+        score_reasoning=[ScoreReasonOut(points=r.points, label=r.label) for r in readiness.reasoning],
         field_checks=[FieldCheckOut(field=c.field, status=c.status, detail=c.detail) for c in field_checks],
         missing_documents=missing_documents,
         duplicate_suspected=duplicate_suspected,
         estimated_delay_days=readiness.estimated_delay_days,
         recommendation=readiness.recommendation,
+        average_ocr_confidence=average_confidence,
     )
 
 
@@ -205,23 +240,36 @@ def get_application(application_id: str, db: Session = Depends(get_db)):
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    field_checks = db.query(models.FieldMismatch).filter(
+    field_checks_rows = db.query(models.FieldMismatch).filter(
         models.FieldMismatch.application_id == application_id
     ).all()
+    field_checks = [FieldCheckResult(field=c.field_name, status=c.status, detail=c.detail) for c in field_checks_rows]
+    missing_documents = application.missing_documents.split(",") if application.missing_documents else []
+
+    # Recomputed, not stored separately — this can never drift out of
+    # sync with the actual readiness_score, because it's produced by
+    # the exact same function from the exact same stored inputs.
+    readiness = compute_readiness(field_checks, missing_documents, application.duplicate_suspected)
+
+    documents = db.query(models.DocumentRecord).filter(models.DocumentRecord.application_id == application_id).all()
+    confidences = [d.ocr_confidence for d in documents if d.ocr_confidence is not None]
+    average_confidence = round(sum(confidences) / len(confidences), 1) if confidences else None
 
     return {
         "id": application.id,
         "citizen_name": application.citizen_name,
         "service_type": application.service_type,
         "readiness_score": application.readiness_score,
+        "score_reasoning": [{"points": r.points, "label": r.label} for r in readiness.reasoning],
         "duplicate_suspected": application.duplicate_suspected,
         "estimated_delay_days": application.estimated_delay_days,
         "recommendation": application.recommendation,
-        "missing_documents": application.missing_documents.split(",") if application.missing_documents else [],
+        "missing_documents": missing_documents,
         "status": application.status,
         "resolved_by": application.resolved_by,
+        "average_ocr_confidence": average_confidence,
         "field_checks": [
-            {"field": c.field_name, "status": c.status, "detail": c.detail} for c in field_checks
+            {"field": c.field_name, "status": c.status, "detail": c.detail} for c in field_checks_rows
         ],
     }
 
@@ -236,8 +284,60 @@ def resolve_application(
     application.status = "resolved"
     application.resolved_by = user["name"]  # from the verified token, not a client-supplied field
     application.resolved_at = datetime.now(timezone.utc)
+    _log_audit(db, application_id, "Resolved", detail=f"Marked resolved by {user['name']}", actor=user["name"])
     db.commit()
     return {"id": application_id, "status": "resolved"}
+
+
+@app.get("/api/applications/{application_id}/audit")
+def get_audit_trail(application_id: str, db: Session = Depends(get_db), _user: dict = Depends(get_current_staff_user)):
+    events = db.query(models.AuditEvent).filter(
+        models.AuditEvent.application_id == application_id
+    ).order_by(models.AuditEvent.created_at.asc()).all()
+    return [
+        {"event_type": e.event_type, "detail": e.detail, "actor": e.actor, "created_at": e.created_at.isoformat() if e.created_at else None}
+        for e in events
+    ]
+
+
+@app.get("/api/applications/{application_id}/report.pdf")
+def download_report(application_id: str, db: Session = Depends(get_db)):
+    application = db.query(models.Application).filter(models.Application.id == application_id).first()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    field_checks_rows = db.query(models.FieldMismatch).filter(models.FieldMismatch.application_id == application_id).all()
+    field_checks = [FieldCheckResult(field=c.field_name, status=c.status, detail=c.detail) for c in field_checks_rows]
+    missing_documents = application.missing_documents.split(",") if application.missing_documents else []
+    readiness = compute_readiness(field_checks, missing_documents, application.duplicate_suspected)
+
+    audit_rows = db.query(models.AuditEvent).filter(
+        models.AuditEvent.application_id == application_id
+    ).order_by(models.AuditEvent.created_at.asc()).all()
+
+    pdf_bytes = build_report_pdf(
+        application={
+            "id": application.id,
+            "citizen_name": application.citizen_name,
+            "service_type": application.service_type,
+            "status": application.status,
+            "readiness_score": application.readiness_score,
+            "score_reasoning": [{"points": r.points, "label": r.label} for r in readiness.reasoning],
+            "missing_documents": missing_documents,
+            "recommendation": application.recommendation,
+        },
+        field_checks=[{"field": c.field_name, "status": c.status, "detail": c.detail} for c in field_checks_rows],
+        audit_events=[
+            {"event_type": e.event_type, "detail": e.detail, "created_at": e.created_at.isoformat() if e.created_at else None}
+            for e in audit_rows
+        ],
+    )
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="sevasetu-report-{application_id}.pdf"'},
+    )
 
 
 # ---------- Regulation RAG assistant ----------
