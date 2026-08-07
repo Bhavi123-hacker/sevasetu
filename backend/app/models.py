@@ -74,6 +74,25 @@ class AuditEvent(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class StaffUser(Base):
+    """
+    Individual accounts, replacing the earlier shared-password-per-role
+    login. That earlier design had a real gap: the role was picked by
+    the client in a dropdown and only checked against one password
+    shared by both roles — nothing actually bound an identity to a
+    role. Here, role comes from the account record the username
+    resolves to, not from anything the client sends.
+    """
+    __tablename__ = "staff_users"
+
+    id = Column(String, primary_key=True, index=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
+    display_name = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # "Officer" | "Administrator"
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class RequiredDocument(Base):
     """
     One row per (service_type, document_type). Replaces the hardcoded

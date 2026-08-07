@@ -12,8 +12,13 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/sevasetu.db")
 
-# check_same_thread=False is only needed for SQLite + multiple FastAPI workers
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# check_same_thread is a SQLite-only connect arg — passing it to
+# psycopg2 (Postgres) raises a TypeError. This was untested before: the
+# original comment claimed swapping DATABASE_URL would work without
+# touching any other file, which was true for the URL but not for this
+# line. Verified against a real local Postgres instance, not assumed.
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

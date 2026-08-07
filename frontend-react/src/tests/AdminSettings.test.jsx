@@ -18,8 +18,8 @@ describe('AdminSettings', () => {
     client.post.mockResolvedValueOnce({ data: { access_token: 'tok', name: 'Suresh', role: 'Officer' } })
 
     render(<AuthProvider><AdminSettings /></AuthProvider>)
-    await user.type(screen.getByLabelText('Your name'), 'Suresh')
-    await user.type(screen.getByLabelText('Password'), 'seva123')
+    await user.type(screen.getByLabelText('Username'), 'officer1')
+    await user.type(screen.getByLabelText('Password'), 'officer-demo-pass')
     await user.click(screen.getByRole('button', { name: /log in/i }))
 
     expect(await screen.findByText(/this page is for administrators/i)).toBeInTheDocument()
@@ -34,9 +34,8 @@ describe('AdminSettings', () => {
     })
 
     render(<AuthProvider><AdminSettings /></AuthProvider>)
-    await user.type(screen.getByLabelText('Your name'), 'Priya')
-    await user.click(screen.getByText('Administrator'))
-    await user.type(screen.getByLabelText('Password'), 'seva123')
+    await user.type(screen.getByLabelText('Username'), 'admin1')
+    await user.type(screen.getByLabelText('Password'), 'admin-demo-pass')
     await user.click(screen.getByRole('button', { name: /log in/i }))
 
     expect(await screen.findByText('Income Certificate')).toBeInTheDocument()

@@ -3,8 +3,7 @@ import { useAuth } from '../context/AuthContext'
 
 export default function StaffGate({ children, requireRole = null }) {
   const { staffUser, login } = useAuth()
-  const [name, setName] = useState('')
-  const [role, setRole] = useState('Officer')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -12,16 +11,18 @@ export default function StaffGate({ children, requireRole = null }) {
   async function handleLogin(event) {
     event.preventDefault()
     setError(null)
-    if (!name.trim()) {
-      setError('Enter your name — it\u2019s used to attribute resolved applications.')
+    if (!username.trim()) {
+      setError('Enter your username.')
       return
     }
     setLoading(true)
     try {
-      await login(name.trim(), role, password)
+      await login(username.trim(), password)
     } catch (err) {
-      if (err.response?.status === 401) {
-        setError('Incorrect password.')
+      if (err.response?.status === 429) {
+        setError(err.response.data.detail) // "Too many failed attempts. Try again in N seconds."
+      } else if (err.response?.status === 401) {
+        setError('Incorrect username or password.')
       } else {
         setError('Could not reach SevaSetu\u2019s backend.')
       }
@@ -35,23 +36,12 @@ export default function StaffGate({ children, requireRole = null }) {
       <div className="card" style={{ maxWidth: 360 }}>
         <h2>Staff Login</h2>
         <p style={{ fontSize: 14, color: 'var(--color-ink-muted)' }}>
-          Real JWT auth — one shared demo password per role, not per-user accounts yet.
+          Individual accounts now — role comes from the account, not from anything picked at login.
         </p>
         <form onSubmit={handleLogin}>
           <div className="field">
-            <label htmlFor="staff-name">Your name</label>
-            <input id="staff-name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="field">
-            <label>Role</label>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <label style={{ fontWeight: 400 }}>
-                <input type="radio" name="role" value="Officer" checked={role === 'Officer'} onChange={() => setRole('Officer')} /> Officer
-              </label>
-              <label style={{ fontWeight: 400 }}>
-                <input type="radio" name="role" value="Administrator" checked={role === 'Administrator'} onChange={() => setRole('Administrator')} /> Administrator
-              </label>
-            </div>
+            <label htmlFor="staff-username">Username</label>
+            <input id="staff-username" type="text" value={username} onChange={(e) => setUsername(e.target.value)} />
           </div>
           <div className="field">
             <label htmlFor="staff-password">Password</label>

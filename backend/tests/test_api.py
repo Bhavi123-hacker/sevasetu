@@ -21,13 +21,13 @@ def client():
 
 @pytest.fixture
 def officer_token(client):
-    r = client.post("/api/auth/login", json={"name": "Suresh", "role": "Officer", "password": "seva123"})
+    r = client.post("/api/auth/login", json={"username": "officer1", "password": "officer-demo-pass"})
     return r.json()["access_token"]
 
 
 @pytest.fixture
 def admin_token(client):
-    r = client.post("/api/auth/login", json={"name": "Priya", "role": "Administrator", "password": "seva123"})
+    r = client.post("/api/auth/login", json={"username": "admin1", "password": "admin-demo-pass"})
     return r.json()["access_token"]
 
 
@@ -81,8 +81,29 @@ def test_duplicate_detection(client):
 
 
 def test_auth_rejects_wrong_password(client):
-    r = client.post("/api/auth/login", json={"name": "X", "role": "Officer", "password": "wrong"})
+    r = client.post("/api/auth/login", json={"username": "officer1", "password": "wrong"})
     assert r.status_code == 401
+
+
+def test_officer_password_does_not_work_for_admin_account_and_vice_versa(client):
+    """
+    The actual vulnerability this replaced: the old login let the client
+    pick a role from a dropdown and checked it against one password
+    shared by both roles. Nothing bound identity to role. This is the
+    real regression test for that fix, not just a generic auth check.
+    """
+    r1 = client.post("/api/auth/login", json={"username": "admin1", "password": "officer-demo-pass"})
+    assert r1.status_code == 401
+
+    r2 = client.post("/api/auth/login", json={"username": "officer1", "password": "admin-demo-pass"})
+    assert r2.status_code == 401
+
+
+def test_login_rate_limiting(client):
+    for _ in range(5):
+        client.post("/api/auth/login", json={"username": "rate_limit_probe", "password": "wrong"})
+    r = client.post("/api/auth/login", json={"username": "rate_limit_probe", "password": "wrong"})
+    assert r.status_code == 429
 
 
 def test_protected_route_rejects_missing_token(client):

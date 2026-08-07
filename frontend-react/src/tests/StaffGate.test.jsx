@@ -29,33 +29,47 @@ describe('StaffGate', () => {
     expect(screen.queryByText('Protected content')).not.toBeInTheDocument()
   })
 
-  it('logs in and reveals protected content on correct credentials', async () => {
+  it('logs in with username/password and reveals protected content', async () => {
     const user = userEvent.setup()
     client.post.mockResolvedValueOnce({
       data: { access_token: 'fake.jwt.token', name: 'Suresh', role: 'Officer' },
     })
 
     renderGated()
-    await user.type(screen.getByLabelText('Your name'), 'Suresh')
-    await user.type(screen.getByLabelText('Password'), 'seva123')
+    await user.type(screen.getByLabelText('Username'), 'officer1')
+    await user.type(screen.getByLabelText('Password'), 'officer-demo-pass')
     await user.click(screen.getByRole('button', { name: /log in/i }))
 
     expect(await screen.findByText('Protected content')).toBeInTheDocument()
-    expect(client.post).toHaveBeenCalledWith('/api/auth/login', { name: 'Suresh', role: 'Officer', password: 'seva123' })
+    expect(client.post).toHaveBeenCalledWith('/api/auth/login', { username: 'officer1', password: 'officer-demo-pass' })
     expect(localStorage.getItem('sevasetu_staff_token')).toBe('fake.jwt.token')
   })
 
-  it('shows an error on wrong password without revealing content', async () => {
+  it('shows a clear error on wrong credentials without revealing content', async () => {
     const user = userEvent.setup()
     client.post.mockRejectedValueOnce({ response: { status: 401 } })
 
     renderGated()
-    await user.type(screen.getByLabelText('Your name'), 'Suresh')
+    await user.type(screen.getByLabelText('Username'), 'officer1')
     await user.type(screen.getByLabelText('Password'), 'wrong')
     await user.click(screen.getByRole('button', { name: /log in/i }))
 
-    expect(await screen.findByText('Incorrect password.')).toBeInTheDocument()
+    expect(await screen.findByText('Incorrect username or password.')).toBeInTheDocument()
     expect(screen.queryByText('Protected content')).not.toBeInTheDocument()
+  })
+
+  it('shows the rate-limit message on a 429', async () => {
+    const user = userEvent.setup()
+    client.post.mockRejectedValueOnce({
+      response: { status: 429, data: { detail: 'Too many failed attempts. Try again in 60 seconds.' } },
+    })
+
+    renderGated()
+    await user.type(screen.getByLabelText('Username'), 'officer1')
+    await user.type(screen.getByLabelText('Password'), 'wrong')
+    await user.click(screen.getByRole('button', { name: /log in/i }))
+
+    expect(await screen.findByText('Too many failed attempts. Try again in 60 seconds.')).toBeInTheDocument()
   })
 
   it('enforces requireRole: an Officer is blocked from an Administrator-only gate', async () => {
@@ -65,8 +79,8 @@ describe('StaffGate', () => {
     })
 
     renderGated({ requireRole: 'Administrator' })
-    await user.type(screen.getByLabelText('Your name'), 'Suresh')
-    await user.type(screen.getByLabelText('Password'), 'seva123')
+    await user.type(screen.getByLabelText('Username'), 'officer1')
+    await user.type(screen.getByLabelText('Password'), 'officer-demo-pass')
     await user.click(screen.getByRole('button', { name: /log in/i }))
 
     await waitFor(() => expect(screen.queryByText('Staff Login')).not.toBeInTheDocument())

@@ -9,11 +9,11 @@ export function AuthProvider({ children }) {
     return stored ? JSON.parse(stored) : null
   })
 
-  async function login(name, role, password) {
-    const response = await client.post('/api/auth/login', { name, role, password })
-    const { access_token, name: confirmedName, role: confirmedRole } = response.data
+  async function login(username, password) {
+    const response = await client.post('/api/auth/login', { username, password })
+    const { access_token, name, role } = response.data
     localStorage.setItem('sevasetu_staff_token', access_token)
-    const user = { name: confirmedName, role: confirmedRole }
+    const user = { name, role }
     localStorage.setItem('sevasetu_staff_user', JSON.stringify(user))
     setStaffUser(user)
     return user

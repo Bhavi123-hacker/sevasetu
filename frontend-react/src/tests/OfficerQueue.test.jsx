@@ -9,8 +9,8 @@ vi.mock('../api/client')
 
 async function loginAsOfficer(user) {
   client.post.mockResolvedValueOnce({ data: { access_token: 'tok', name: 'Suresh', role: 'Officer' } })
-  await user.type(screen.getByLabelText('Your name'), 'Suresh')
-  await user.type(screen.getByLabelText('Password'), 'seva123')
+  await user.type(screen.getByLabelText('Username'), 'officer1')
+  await user.type(screen.getByLabelText('Password'), 'officer-demo-pass')
   await user.click(screen.getByRole('button', { name: /log in/i }))
 }
 
@@ -91,9 +91,8 @@ describe('OfficerQueue', () => {
     client.get.mockResolvedValueOnce({ data: [] }) // audit
 
     render(<AuthProvider><OfficerQueue /></AuthProvider>)
-    await user.type(screen.getByLabelText('Your name'), 'Priya')
-    await user.click(screen.getByText('Administrator'))
-    await user.type(screen.getByLabelText('Password'), 'seva123')
+    await user.type(screen.getByLabelText('Username'), 'admin1')
+    await user.type(screen.getByLabelText('Password'), 'admin-demo-pass')
     await user.click(screen.getByRole('button', { name: /log in/i }))
 
     await user.click(await screen.findByText(/rahul kumar/i))

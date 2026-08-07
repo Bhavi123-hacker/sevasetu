@@ -12,6 +12,7 @@ This keeps the upload flexible across service types without needing a
 fixed list of named parameters.
 """
 import io
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,7 +37,15 @@ from .pipeline.rag import index_corpus, answer_question
 from .pipeline.sentiment import analyze_sentiment
 from .pipeline.generation import generate_answer
 from .pipeline.report import build_report_pdf
-from .auth import create_access_token, get_current_staff_user, require_role, STAFF_DEMO_PASSWORD
+from .logging_config import configure_logging, get_logger
+
+configure_logging()
+logger = get_logger("sevasetu")
+from .auth import (
+    create_access_token, get_current_staff_user, require_role,
+    verify_password, is_locked_out, record_failed_attempt, clear_failed_attempts,
+    seed_demo_accounts_if_empty,
+)
 
 Base.metadata.create_all(bind=engine)
 index_corpus()  # idempotent — indexes the regulation corpus once, no-ops if already indexed
@@ -44,8 +53,30 @@ index_corpus()  # idempotent — indexes the regulation corpus once, no-ops if a
 # One-off session for startup seeding — get_db is request-scoped, this isn't a request.
 with SessionLocal() as _startup_db:
     seed_defaults_if_empty(_startup_db)
+    seed_demo_accounts_if_empty(_startup_db, models)
 
 app = FastAPI(title="SevaSetu API", version="0.2.0")
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.monotonic()
+    try:
+        response = await call_next(request)
+    except Exception as exc:
+        duration_ms = round((time.monotonic() - start) * 1000, 1)
+        logger.error("request_failed", extra={
+            "method": request.method, "path": request.url.path,
+            "duration_ms": duration_ms, "error": str(exc),
+        })
+        raise
+    duration_ms = round((time.monotonic() - start) * 1000, 1)
+    log_level = logger.warning if response.status_code >= 400 else logger.info
+    log_level("request_completed", extra={
+        "method": request.method, "path": request.url.path,
+        "status_code": response.status_code, "duration_ms": duration_ms,
+    })
+    return response
 
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -64,8 +95,7 @@ def health():
 # ---------- Staff authentication ----------
 
 class LoginRequest(BaseModel):
-    name: str
-    role: str  # "Officer" | "Administrator"
+    username: str
     password: str
 
 
@@ -77,16 +107,29 @@ class LoginResponse(BaseModel):
 
 
 @app.post("/api/auth/login", response_model=LoginResponse)
-def login(payload: LoginRequest):
-    if payload.role not in ("Officer", "Administrator"):
-        raise HTTPException(status_code=422, detail="role must be 'Officer' or 'Administrator'")
-    if not payload.name.strip():
-        raise HTTPException(status_code=422, detail="name is required")
-    if payload.password != STAFF_DEMO_PASSWORD:
-        raise HTTPException(status_code=401, detail="Incorrect password")
+def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    username = payload.username.strip().lower()
 
-    token = create_access_token(name=payload.name.strip(), role=payload.role)
-    return LoginResponse(access_token=token, name=payload.name.strip(), role=payload.role)
+    lockout_remaining = is_locked_out(username)
+    if lockout_remaining is not None:
+        logger.warning("login_locked_out", extra={"username": username, "seconds_remaining": lockout_remaining})
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many failed attempts. Try again in {lockout_remaining} seconds.",
+        )
+
+    user = db.query(models.StaffUser).filter(models.StaffUser.username == username).first()
+
+    if not user or not verify_password(payload.password, user.password_hash):
+        record_failed_attempt(username)
+        logger.warning("login_failed", extra={"username": username})
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+
+    clear_failed_attempts(username)
+    logger.info("login_succeeded", extra={"username": username, "role": user.role})
+
+    token = create_access_token(username=user.username, name=user.display_name, role=user.role)
+    return LoginResponse(access_token=token, name=user.display_name, role=user.role)
 
 
 class FieldCheckOut(BaseModel):
@@ -181,6 +224,11 @@ async def submit_application(request: Request, db: Session = Depends(get_db)):
 
     readiness = compute_readiness(field_checks, missing_documents, duplicate_suspected)
     _log_audit(db, application_id, "Readiness Scored", detail=f"Score: {readiness.score}%")
+    logger.info("application_submitted", extra={
+        "application_id": application_id, "service_type": service_type,
+        "readiness_score": readiness.score, "document_count": len(uploaded_docs),
+        "average_ocr_confidence": average_confidence, "duplicate_suspected": duplicate_suspected,
+    })
 
     db.add(models.Application(
         id=application_id,

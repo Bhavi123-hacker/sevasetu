@@ -47,6 +47,9 @@ A future where no citizen is turned away at a government office because of a mis
 - OCR confidence is measured and surfaced, not assumed
 - Full audit trail per application — every pipeline stage logged, not just the final status
 - Downloadable PDF verification report per application
+- Individual staff accounts with hashed passwords and login rate limiting — not one shared password per role anymore
+- Optional PostgreSQL support, verified against a real Postgres instance
+- Structured JSON logging for operational visibility, separate from the citizen-facing audit trail
 
 ## Success Metrics
 
@@ -106,9 +109,13 @@ The three flows share the same backend, database, and officer-facing surface, bu
 | CI | GitHub Actions | Backend tests, frontend tests + build, and both Docker images, on every push |
 | Explanation layer | Bhashini API | Free, government-run, supports Indian languages |
 | Containerization | Docker + Docker Compose | One command to build and run locally |
-| Staff authentication | PyJWT, `HS256` signed tokens | Real backend-issued, expiring, verified tokens — protects officer/admin routes; citizen-facing routes stay open by design |
+| Staff authentication | PyJWT + bcrypt, individual hashed-password accounts | Real backend-issued, expiring, verified tokens; role comes from the account record, not a client-selected dropdown — see security note below |
+| Database (optional) | PostgreSQL, verified against a real local instance | SQLite stays the default (zero extra service for the demo); Postgres is a docker-compose override, not a rewrite |
+| Logging | Structured JSON (Python `logging`) | Operational visibility — separate concern from the AuditEvent table, which is a citizen-facing business record, not an ops log |
 
 **On the free-tier constraint:** ChromaDB's default embedding function downloads an ~80MB model from the internet the first time it runs — that surfaced as a real failure in a network-restricted sandbox while building this, not a hypothetical concern. Supplying TF-IDF vectors directly instead avoids that download entirely, alongside avoiding any per-query API cost.
+
+**On staff authentication specifically:** the earlier version had a real gap, not just a missing nice-to-have — login took a name, a client-selected role (Officer or Administrator, picked from a dropdown), and one password shared by both roles. Nothing actually bound an identity to a role beyond that shared secret, so anyone who knew the one password could log in as *either* role. It's now two individual accounts with their own bcrypt-hashed passwords (`officer1` / `admin1`, passwords set via `OFFICER_DEMO_PASSWORD` / `ADMIN_DEMO_PASSWORD`), and role comes from the account record the username resolves to — the client never gets to assert it. Login also rate-limits after 5 failed attempts (60-second lockout). Worth knowing this rate limit is in-memory and single-process — real multi-instance production auth would need a shared store (Redis) for it, not pretended away here.
 
 **On "hybrid retrieval" specifically:** BM25 and TF-IDF are both lexical (keyword-overlap) methods — this is not a lexical+semantic hybrid, whatever the term "hybrid" might suggest elsewhere. A true semantic layer would need embeddings from a downloaded transformer model, which runs into the same network restriction described above. Fusing BM25 with TF-IDF via Reciprocal Rank Fusion is still a real, worthwhile improvement — BM25 generally outperforms raw TF-IDF, and RRF is the actual standard fusion technique — it just isn't the "lexical + semantic" story that phrase sometimes implies. Building this surfaced a genuine RRF edge case worth knowing about: when two rankers disagree by an exact swap (one ranks document A first and B second, the other ranks B first and A second), their fused scores come out identical, and the tie gets broken by whichever ranker's results were passed first — not by which ranker is more trustworthy, unless you deliberately order the fusion input to reflect that.
 
@@ -196,6 +203,18 @@ npm run dev
 
 The old Streamlit app still runs too, if you want it: `cd frontend && pip install -r requirements.txt && streamlit run app.py`. It's not part of the Docker stack anymore, but the code hasn't been deleted.
 
+## Deployment
+
+`render.yaml` at the repo root is a real Render blueprint — backend, frontend, and a managed Postgres database, wired together. What it can't do: get you an actual live URL. That needs your own Render account, which I have no access to.
+
+Steps, once you're ready:
+1. Push this repo to GitHub (already covered earlier).
+2. On Render: **New → Blueprint**, connect the repo. It reads `render.yaml` and proposes all 3 resources (2 services + 1 database).
+3. Render generates a real `JWT_SECRET_KEY` for you (`generateValue: true`) — you won't need to set that yourself.
+4. You will need to set `OFFICER_DEMO_PASSWORD` and `ADMIN_DEMO_PASSWORD` yourself in the Render dashboard (`sync: false` means Render won't auto-generate or commit these — real passwords shouldn't live in a YAML file in your repo).
+5. After the backend service deploys, copy its real `.onrender.com` URL and update `VITE_API_BASE_URL` in `render.yaml`'s frontend block — the placeholder in the file can't know this URL in advance, since it doesn't exist until the backend is already created. Commit that change, redeploy the frontend.
+6. Free tier note: Render's free web services spin down after inactivity and take ~30-60s to wake on the next request — expected, not a bug, if your first load after a while feels slow.
+
 ## Running Tests
 
 ```bash
@@ -233,6 +252,8 @@ Both suites also run automatically on every push via GitHub Actions (`.github/wo
 sevasetu-starter/
 ├── README.md
 ├── docker-compose.yml
+├── docker-compose.postgres.yml     # Optional Postgres override — verified against a real instance
+├── render.yaml                     # Render deployment blueprint
 ├── .gitignore
 ├── backend/
 │   ├── Dockerfile
