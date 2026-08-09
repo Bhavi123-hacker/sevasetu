@@ -43,7 +43,7 @@ configure_logging()
 logger = get_logger("sevasetu")
 from .auth import (
     create_access_token, get_current_staff_user, require_role,
-    verify_password, is_locked_out, record_failed_attempt, clear_failed_attempts,
+    verify_password, hash_password, is_locked_out, record_failed_attempt, clear_failed_attempts,
     seed_demo_accounts_if_empty,
 )
 
@@ -120,7 +120,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     user = db.query(models.StaffUser).filter(models.StaffUser.username == username).first()
 
-    if not user or not verify_password(payload.password, user.password_hash):
+    if not user or not verify_password(payload.password, user.password_hash) or not user.is_active:
         record_failed_attempt(username)
         logger.warning("login_failed", extra={"username": username})
         raise HTTPException(status_code=401, detail="Incorrect username or password")
@@ -152,6 +152,7 @@ class ReadinessResponse(BaseModel):
     field_checks: List[FieldCheckOut]
     missing_documents: List[str]
     duplicate_suspected: bool
+    duplicate_confidence: Optional[int] = None
     estimated_delay_days: str
     recommendation: str
     average_ocr_confidence: float
@@ -213,14 +214,25 @@ async def submit_application(request: Request, db: Session = Depends(get_db)):
 
     missing_documents = find_missing_documents(db, service_type, list(uploaded_docs.keys()))
 
+    # First non-empty DOB found across the bundle — if they disagree
+    # across documents, that's already caught and flagged by the
+    # consistency check above; this is just picking one value to store.
+    date_of_birth = next((f.get("date_of_birth") for f in fields_by_doc.values() if f.get("date_of_birth")), None)
+
     existing = db.query(models.Application).filter(
         models.Application.service_type == service_type
     ).all()
-    existing_dicts = [{"id": a.id, "citizen_name": a.citizen_name, "service_type": a.service_type} for a in existing]
-    duplicate = find_probable_duplicate(citizen_name, service_type, existing_dicts)
-    duplicate_suspected = bool(duplicate)
-    _log_audit(db, application_id, "Duplicate Check Completed",
-               detail="Possible duplicate found" if duplicate_suspected else "No duplicate found")
+    existing_dicts = [
+        {"id": a.id, "citizen_name": a.citizen_name, "service_type": a.service_type, "date_of_birth": a.date_of_birth}
+        for a in existing
+    ]
+    duplicate_match = find_probable_duplicate(citizen_name, service_type, existing_dicts, date_of_birth)
+    duplicate_suspected = duplicate_match is not None
+    duplicate_confidence = duplicate_match["confidence"] if duplicate_match else None
+    _log_audit(
+        db, application_id, "Duplicate Check Completed",
+        detail=f"Possible duplicate found, {duplicate_confidence}% confidence" if duplicate_suspected else "No duplicate found",
+    )
 
     readiness = compute_readiness(field_checks, missing_documents, duplicate_suspected)
     _log_audit(db, application_id, "Readiness Scored", detail=f"Score: {readiness.score}%")
@@ -233,9 +245,11 @@ async def submit_application(request: Request, db: Session = Depends(get_db)):
     db.add(models.Application(
         id=application_id,
         citizen_name=citizen_name,
+        date_of_birth=date_of_birth,
         service_type=service_type,
         readiness_score=readiness.score,
         duplicate_suspected=duplicate_suspected,
+        duplicate_confidence=duplicate_confidence,
         estimated_delay_days=readiness.estimated_delay_days,
         recommendation=readiness.recommendation,
         missing_documents=",".join(missing_documents),
@@ -259,6 +273,7 @@ async def submit_application(request: Request, db: Session = Depends(get_db)):
         field_checks=[FieldCheckOut(field=c.field, status=c.status, detail=c.detail) for c in field_checks],
         missing_documents=missing_documents,
         duplicate_suspected=duplicate_suspected,
+        duplicate_confidence=duplicate_confidence,
         estimated_delay_days=readiness.estimated_delay_days,
         recommendation=readiness.recommendation,
         average_ocr_confidence=average_confidence,
@@ -310,6 +325,7 @@ def get_application(application_id: str, db: Session = Depends(get_db)):
         "readiness_score": application.readiness_score,
         "score_reasoning": [{"points": r.points, "label": r.label} for r in readiness.reasoning],
         "duplicate_suspected": application.duplicate_suspected,
+        "duplicate_confidence": application.duplicate_confidence,
         "estimated_delay_days": application.estimated_delay_days,
         "recommendation": application.recommendation,
         "missing_documents": missing_documents,
@@ -497,6 +513,19 @@ def officer_stats(db: Session = Depends(get_db), _user: dict = Depends(get_curre
     for a in applications:
         by_service[a.service_type] = by_service.get(a.service_type, 0) + 1
 
+    by_date = {}
+    for a in applications:
+        if a.created_at:
+            day = a.created_at.strftime("%Y-%m-%d")
+            by_date[day] = by_date.get(day, 0) + 1
+    by_date = dict(sorted(by_date.items()))  # chronological, not insertion order
+
+    mismatches = db.query(models.FieldMismatch).filter(models.FieldMismatch.status == "fail").all()
+    mismatch_reasons = {}
+    for m in mismatches:
+        label = m.field_name.replace("_", " ").title()
+        mismatch_reasons[label] = mismatch_reasons.get(label, 0) + 1
+
     avg_readiness = round(sum(a.readiness_score or 0 for a in applications) / total, 1) if total else 0
 
     sentiment_counts = {"positive": 0, "neutral": 0, "negative": 0}
@@ -510,9 +539,85 @@ def officer_stats(db: Session = Depends(get_db), _user: dict = Depends(get_curre
         "average_readiness_score": avg_readiness,
         "resolutions_by_officer": by_officer,
         "applications_by_service": by_service,
+        "applications_by_date": by_date,
+        "common_mismatch_reasons": mismatch_reasons,
         "feedback_sentiment_counts": sentiment_counts,
         "total_feedback": len(feedback),
     }
+
+
+# ---------- Administrator: staff account management ----------
+# Turns "2 hardcoded demo accounts" into something a real team can
+# actually onboard people into. Deactivate is soft (is_active=False),
+# not a delete — keeps the audit/resolution history intact for
+# whoever used the account while it was active.
+
+class CreateStaffUserRequest(BaseModel):
+    username: str
+    password: str
+    display_name: str
+    role: str  # "Officer" | "Administrator"
+
+
+@app.post("/api/staff/users")
+def create_staff_user(
+    payload: CreateStaffUserRequest, db: Session = Depends(get_db), _user: dict = Depends(require_role("Administrator"))
+):
+    if payload.role not in ("Officer", "Administrator"):
+        raise HTTPException(status_code=422, detail="role must be 'Officer' or 'Administrator'")
+    username = payload.username.strip().lower()
+    if not username or not payload.password or not payload.display_name.strip():
+        raise HTTPException(status_code=422, detail="username, password, and display_name are all required")
+    if len(payload.password) < 8:
+        raise HTTPException(status_code=422, detail="password must be at least 8 characters")
+    if db.query(models.StaffUser).filter(models.StaffUser.username == username).first():
+        raise HTTPException(status_code=409, detail="That username is already taken")
+
+    new_user = models.StaffUser(
+        id=str(uuid.uuid4())[:8],
+        username=username,
+        password_hash=hash_password(payload.password),
+        display_name=payload.display_name.strip(),
+        role=payload.role,
+        is_active=True,
+    )
+    db.add(new_user)
+    db.commit()
+    logger.info("staff_account_created", extra={"username": username, "role": payload.role, "created_by": _user["username"]})
+    return {"username": username, "display_name": new_user.display_name, "role": new_user.role, "is_active": True}
+
+
+@app.get("/api/staff/users")
+def list_staff_users(db: Session = Depends(get_db), _user: dict = Depends(require_role("Administrator"))):
+    users = db.query(models.StaffUser).order_by(models.StaffUser.created_at.asc()).all()
+    return [
+        {"username": u.username, "display_name": u.display_name, "role": u.role, "is_active": u.is_active}
+        for u in users
+    ]
+
+
+@app.patch("/api/staff/users/{username}/deactivate")
+def deactivate_staff_user(username: str, db: Session = Depends(get_db), user: dict = Depends(require_role("Administrator"))):
+    if username == user["username"]:
+        raise HTTPException(status_code=400, detail="You can't deactivate your own account while logged in as it")
+    target = db.query(models.StaffUser).filter(models.StaffUser.username == username).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="No such account")
+    target.is_active = False
+    db.commit()
+    logger.info("staff_account_deactivated", extra={"username": username, "deactivated_by": user["username"]})
+    return {"username": username, "is_active": False}
+
+
+@app.patch("/api/staff/users/{username}/activate")
+def activate_staff_user(username: str, db: Session = Depends(get_db), user: dict = Depends(require_role("Administrator"))):
+    target = db.query(models.StaffUser).filter(models.StaffUser.username == username).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="No such account")
+    target.is_active = True
+    db.commit()
+    logger.info("staff_account_reactivated", extra={"username": username, "reactivated_by": user["username"]})
+    return {"username": username, "is_active": True}
 
 
 # ---------- Administrator: required-documents settings ----------

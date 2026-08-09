@@ -68,6 +68,21 @@ function OfficerDashboardContent() {
         </div>
       </div>
 
+      <div style={{ display: 'flex', gap: 16 }}>
+        <div className="card" style={{ flex: 1 }}>
+          <p><strong>Applications by day</strong></p>
+          {Object.keys(stats.applications_by_date || {}).length
+            ? <BarList data={stats.applications_by_date} />
+            : <p style={{ fontSize: 13, color: 'var(--color-ink-muted)' }}>No applications submitted yet.</p>}
+        </div>
+        <div className="card" style={{ flex: 1 }}>
+          <p><strong>Common mismatch reasons</strong></p>
+          {Object.keys(stats.common_mismatch_reasons || {}).length
+            ? <BarList data={stats.common_mismatch_reasons} />
+            : <p style={{ fontSize: 13, color: 'var(--color-ink-muted)' }}>No mismatches flagged yet.</p>}
+        </div>
+      </div>
+
       <h3>Feedback Insights</h3>
       <div className="card" style={{ display: 'flex', gap: 24 }}>
         <Metric label="Positive" value={stats.feedback_sentiment_counts.positive || 0} />

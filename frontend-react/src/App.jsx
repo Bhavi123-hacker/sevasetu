@@ -7,6 +7,7 @@ import Feedback from './pages/Feedback'
 import OfficerQueue from './pages/OfficerQueue'
 import OfficerDashboard from './pages/OfficerDashboard'
 import AdminSettings from './pages/AdminSettings'
+import ManageStaff from './pages/ManageStaff'
 import { AuthProvider } from './context/AuthContext'
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
             <Route path="/officer-queue" element={<OfficerQueue />} />
             <Route path="/officer-dashboard" element={<OfficerDashboard />} />
             <Route path="/admin-settings" element={<AdminSettings />} />
+            <Route path="/manage-staff" element={<ManageStaff />} />
           </Routes>
         </Layout>
       </BrowserRouter>

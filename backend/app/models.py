@@ -12,9 +12,11 @@ class Application(Base):
 
     id = Column(String, primary_key=True, index=True)
     citizen_name = Column(String, nullable=False)
+    date_of_birth = Column(String, nullable=True)  # as extracted by OCR — used for duplicate detection
     service_type = Column(String, nullable=False, index=True)
     readiness_score = Column(Integer, nullable=True)
     duplicate_suspected = Column(Boolean, default=False)
+    duplicate_confidence = Column(Integer, nullable=True)  # 0-100, only set when duplicate_suspected is True
     estimated_delay_days = Column(String, nullable=True)
     recommendation = Column(String, nullable=True)
     missing_documents = Column(String, nullable=True)  # comma-separated, simplest for an MVP
@@ -90,6 +92,7 @@ class StaffUser(Base):
     password_hash = Column(String, nullable=False)
     display_name = Column(String, nullable=False)
     role = Column(String, nullable=False)  # "Officer" | "Administrator"
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

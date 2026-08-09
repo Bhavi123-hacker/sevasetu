@@ -110,6 +110,13 @@ export default function CitizenUpload() {
               accept="image/png, image/jpeg"
               onChange={(e) => handleFileChange(docType, e.target.files)}
             />
+            {files[docType] && (
+              <img
+                src={URL.createObjectURL(files[docType])}
+                alt={`${docLabel} preview`}
+                style={{ marginTop: 8, maxHeight: 100, borderRadius: 'var(--radius)', border: '1px solid var(--color-border)' }}
+              />
+            )}
           </div>
         ))}
 
@@ -167,7 +174,9 @@ function ReadinessResult({ result, onStartNew }) {
         </p>
 
         {result.duplicate_suspected && (
-          <div className="status-banner warning">This looks like a repeat submission of an existing application.</div>
+          <div className="status-banner warning">
+            This looks like a repeat submission of an existing application ({result.duplicate_confidence}% confidence).
+          </div>
         )}
 
         <h3>Document checks</h3>

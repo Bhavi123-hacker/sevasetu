@@ -30,6 +30,23 @@
   --space-5: 40px;
 }
 
+[data-theme="dark"] {
+  --color-bg: #14181a;
+  --color-surface: #1d2426;
+  --color-ink: #e9edee;
+  --color-ink-muted: #9aa7a5;
+  --color-primary: #3fa79c;
+  --color-primary-hover: #52bbaf;
+  --color-border: #2c3436;
+
+  --color-success-bg: #163726;
+  --color-success-text: #6fd897;
+  --color-warning-bg: #3d2e12;
+  --color-warning-text: #f0b750;
+  --color-danger-bg: #3a1a18;
+  --color-danger-text: #f18b83;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -40,6 +57,7 @@ body {
   color: var(--color-ink);
   font-family: var(--font-body);
   line-height: 1.5;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 h1, h2, h3 {

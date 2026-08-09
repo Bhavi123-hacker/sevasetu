@@ -124,6 +124,9 @@ function OfficerQueueContent() {
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--color-border)' }}>
                 <p><strong>Application ID:</strong> {detail.id} | <strong>Status:</strong> {detail.status}</p>
                 <p><strong>OCR confidence:</strong> {detail.average_ocr_confidence}%</p>
+                {detail.duplicate_suspected && (
+                  <p><strong>Duplicate confidence:</strong> {detail.duplicate_confidence}%</p>
+                )}
 
                 <p style={{ marginBottom: 4 }}><strong>Score breakdown:</strong></p>
                 {detail.score_reasoning.map((reason, i) => (

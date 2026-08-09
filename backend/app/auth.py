@@ -87,9 +87,31 @@ def _decode_token(token: str) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
-def get_current_staff_user(credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme)) -> dict:
-    """FastAPI dependency — any valid staff token (Officer or Administrator)."""
+def _get_db_session():
+    from .database import SessionLocal
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def get_current_staff_user(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
+    db=Depends(_get_db_session),
+) -> dict:
+    """
+    FastAPI dependency — any valid staff token (Officer or Administrator).
+    Checks is_active against the DB on every call, not just token
+    validity — a deactivated account's existing token stops working
+    immediately instead of staying valid until it naturally expires,
+    which is the actual point of having a deactivate button at all.
+    """
     payload = _decode_token(credentials.credentials)
+    from . import models
+    user_row = db.query(models.StaffUser).filter(models.StaffUser.username == payload["sub"]).first()
+    if user_row is None or not user_row.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Account no longer active")
     return {"username": payload["sub"], "name": payload["name"], "role": payload["role"]}
 
 
