@@ -3,21 +3,30 @@ import client from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import StaffGate from '../components/StaffGate'
 
-function BarList({ data }) {
+function BarList({ data, color = 'var(--color-primary)' }) {
   const entries = Object.entries(data)
   const max = Math.max(1, ...entries.map(([, v]) => v))
+  const total = entries.reduce((acc, [, v]) => acc + v, 0)
+
   return (
-    <div>
-      {entries.map(([label, value]) => (
-        <div key={label} style={{ marginBottom: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-            <span>{label}</span><span>{value}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {entries.map(([label, value]) => {
+        const pct = Math.round((value / max) * 100)
+        const sharePct = total > 0 ? Math.round((value / total) * 100) : 0
+        return (
+          <div key={label}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+              <span style={{ fontWeight: 500 }}>{label}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-ink-muted)' }}>
+                <strong>{value}</strong> ({sharePct}%)
+              </span>
+            </div>
+            <div style={{ background: 'var(--color-border)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+              <div style={{ background: color, width: `${pct}%`, height: 8, borderRadius: 4, transition: 'width 0.3s ease' }} />
+            </div>
           </div>
-          <div style={{ background: 'var(--color-border)', borderRadius: 4, height: 8 }}>
-            <div style={{ background: 'var(--color-primary)', width: `${(value / max) * 100}%`, height: 8, borderRadius: 4 }} />
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -38,80 +47,167 @@ function OfficerDashboardContent() {
   }, [])
 
   if (error) return <div className="status-banner danger">{error}</div>
-  if (!stats) return <p>Loading\u2026</p>
+  if (!stats) return <p style={{ color: 'var(--color-ink-muted)' }}>Loading analytics data\u2026</p>
+
+  const resolutionRate = stats.total_applications > 0
+    ? Math.round((stats.resolved_count / stats.total_applications) * 100)
+    : 0
 
   return (
     <div>
-      <h2>Officer Dashboard</h2>
-      <p style={{ color: 'var(--color-ink-muted)' }}>Logged in as {staffUser.name}</p>
-
-      <h3>Productivity</h3>
-      <div className="card" style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-        <Metric label="Total applications" value={stats.total_applications} />
-        <Metric label="Resolved" value={stats.resolved_count} />
-        <Metric label="Pending" value={stats.pending_count} />
-        <Metric label="Average readiness score" value={`${stats.average_readiness_score}%`} />
+      <div className="page-header">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h2>Productivity & Analytics Dashboard</h2>
+            <p>Real-time civic operational metrics, workload distribution, and citizen sentiment.</p>
+          </div>
+          <div className="badge badge-info" style={{ padding: '6px 12px', fontSize: 13 }}>
+            Logged in as <strong>{staffUser.name}</strong>
+          </div>
+        </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 16 }}>
-        <div className="card" style={{ flex: 1 }}>
-          <p><strong>Resolutions by officer</strong></p>
+      {/* KPI Overview Grid */}
+      <div className="metric-grid" style={{ marginBottom: 24 }}>
+        <div className="metric-card" style={{ borderTop: '3px solid var(--color-primary)' }}>
+          <div className="metric-label">Total applications</div>
+          <div className="metric-value">{stats.total_applications}</div>
+        </div>
+        <div className="metric-card" style={{ borderTop: '3px solid var(--color-success-solid)' }}>
+          <div className="metric-label">Resolved</div>
+          <div className="metric-value" style={{ color: 'var(--color-success-solid)' }}>
+            {stats.resolved_count} <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink-muted)' }}>({resolutionRate}%)</span>
+          </div>
+        </div>
+        <div className="metric-card" style={{ borderTop: '3px solid var(--color-warning-solid)' }}>
+          <div className="metric-label">Pending</div>
+          <div className="metric-value" style={{ color: 'var(--color-warning-solid)' }}>{stats.pending_count}</div>
+        </div>
+        <div className="metric-card" style={{ borderTop: '3px solid #6366f1' }}>
+          <div className="metric-label">Average readiness score</div>
+          <div className="metric-value">{stats.average_readiness_score}%</div>
+        </div>
+      </div>
+
+      {/* Distribution Row 1 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginBottom: 16 }}>
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header">
+            <h3 style={{ margin: 0 }}>Resolutions by officer</h3>
+            <span className="badge badge-neutral">Workload</span>
+          </div>
           {Object.keys(stats.resolutions_by_officer).length
-            ? <BarList data={stats.resolutions_by_officer} />
+            ? <BarList data={stats.resolutions_by_officer} color="var(--color-success-solid)" />
             : <p style={{ fontSize: 13, color: 'var(--color-ink-muted)' }}>No applications resolved yet.</p>}
         </div>
-        <div className="card" style={{ flex: 1 }}>
-          <p><strong>Applications by service type</strong></p>
+
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header">
+            <h3 style={{ margin: 0 }}>Applications by service type</h3>
+            <span className="badge badge-neutral">Demand</span>
+          </div>
           {Object.keys(stats.applications_by_service).length
-            ? <BarList data={stats.applications_by_service} />
+            ? <BarList data={stats.applications_by_service} color="var(--color-primary)" />
             : <p style={{ fontSize: 13, color: 'var(--color-ink-muted)' }}>No applications submitted yet.</p>}
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 16 }}>
-        <div className="card" style={{ flex: 1 }}>
-          <p><strong>Applications by day</strong></p>
+      {/* Distribution Row 2 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16, marginBottom: 24 }}>
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header">
+            <h3 style={{ margin: 0 }}>Applications by day</h3>
+            <span className="badge badge-neutral">Timeline</span>
+          </div>
           {Object.keys(stats.applications_by_date || {}).length
-            ? <BarList data={stats.applications_by_date} />
+            ? <BarList data={stats.applications_by_date} color="#0f766e" />
             : <p style={{ fontSize: 13, color: 'var(--color-ink-muted)' }}>No applications submitted yet.</p>}
         </div>
-        <div className="card" style={{ flex: 1 }}>
-          <p><strong>Common mismatch reasons</strong></p>
+
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header">
+            <h3 style={{ margin: 0 }}>Common mismatch reasons</h3>
+            <span className="badge badge-warning">Verification Flags</span>
+          </div>
           {Object.keys(stats.common_mismatch_reasons || {}).length
-            ? <BarList data={stats.common_mismatch_reasons} />
+            ? <BarList data={stats.common_mismatch_reasons} color="var(--color-danger-solid)" />
             : <p style={{ fontSize: 13, color: 'var(--color-ink-muted)' }}>No mismatches flagged yet.</p>}
         </div>
       </div>
 
-      <h3>Feedback Insights</h3>
-      <div className="card" style={{ display: 'flex', gap: 24 }}>
-        <Metric label="Positive" value={stats.feedback_sentiment_counts.positive || 0} />
-        <Metric label="Neutral" value={stats.feedback_sentiment_counts.neutral || 0} />
-        <Metric label="Negative" value={stats.feedback_sentiment_counts.negative || 0} />
-      </div>
-
-      {feedback.length ? (
-        <div className="card">
-          <p><strong>Recent feedback</strong></p>
-          {feedback.slice(0, 10).map((item) => {
-            const icon = { positive: '\ud83d\ude42', neutral: '\ud83d\ude10', negative: '\ud83d\ude41' }[item.sentiment_label] || ''
-            return (
-              <p key={item.id}>
-                {icon} <strong>{item.citizen_name || 'Anonymous'}</strong> ({item.sentiment_label}, score {item.sentiment_score}): {item.text}
-              </p>
-            )
-          })}
+      {/* Citizen Sentiment Section */}
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <h3 style={{ margin: 0 }}>Citizen Feedback & Sentiment Insights</h3>
+            <p style={{ fontSize: 13, color: 'var(--color-ink-muted)', margin: '4px 0 0' }}>
+              Sentiment analysis scored via VADER compound classification from real citizen submissions.
+            </p>
+          </div>
+          <span className="badge badge-neutral">{stats.total_feedback || 0} Total Submissions</span>
         </div>
-      ) : <p style={{ fontSize: 13, color: 'var(--color-ink-muted)' }}>No feedback submitted yet.</p>}
-    </div>
-  )
-}
 
-function Metric({ label, value }) {
-  return (
-    <div>
-      <div style={{ fontSize: 13, color: 'var(--color-ink-muted)' }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 600 }}>{value}</div>
+        <div className="metric-grid" style={{ marginBottom: 20 }}>
+          <div className="metric-card" style={{ background: 'var(--color-success-bg)', borderColor: 'var(--color-success-border)' }}>
+            <div className="metric-label" style={{ color: 'var(--color-success-text)' }}>Positive</div>
+            <div className="metric-value" style={{ color: 'var(--color-success-solid)' }}>
+              {stats.feedback_sentiment_counts.positive || 0}
+            </div>
+          </div>
+          <div className="metric-card" style={{ background: 'var(--color-warning-bg)', borderColor: 'var(--color-warning-border)' }}>
+            <div className="metric-label" style={{ color: 'var(--color-warning-text)' }}>Neutral</div>
+            <div className="metric-value" style={{ color: 'var(--color-warning-solid)' }}>
+              {stats.feedback_sentiment_counts.neutral || 0}
+            </div>
+          </div>
+          <div className="metric-card" style={{ background: 'var(--color-danger-bg)', borderColor: 'var(--color-danger-border)' }}>
+            <div className="metric-label" style={{ color: 'var(--color-danger-text)' }}>Negative</div>
+            <div className="metric-value" style={{ color: 'var(--color-danger-solid)' }}>
+              {stats.feedback_sentiment_counts.negative || 0}
+            </div>
+          </div>
+        </div>
+
+        {feedback.length ? (
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Recent Citizen Comments:</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {feedback.slice(0, 8).map((item) => {
+                const badgeStyle = item.sentiment_label === 'positive' ? 'badge-success'
+                  : item.sentiment_label === 'negative' ? 'badge-danger' : 'badge-neutral'
+                const emoji = item.sentiment_label === 'positive' ? '😊'
+                  : item.sentiment_label === 'negative' ? '🙁' : '😐'
+
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      padding: '10px 14px',
+                      background: 'var(--color-surface-hover)',
+                      borderRadius: 'var(--radius)',
+                      border: '1px solid var(--color-border-subtle)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>
+                        {emoji} {item.citizen_name || 'Anonymous Citizen'}
+                      </span>
+                      <span className={`badge ${badgeStyle}`} style={{ fontSize: 11 }}>
+                        {item.sentiment_label} ({item.sentiment_score})
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--color-ink)' }}>
+                      "{item.text}"
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <p style={{ fontSize: 13, color: 'var(--color-ink-muted)' }}>No feedback submitted yet.</p>
+        )}
+      </div>
     </div>
   )
 }

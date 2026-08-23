@@ -73,24 +73,51 @@ describe('CheckStatus', () => {
     const user = userEvent.setup()
     client.get.mockRejectedValueOnce({ response: { status: 404 } })
     render(<CheckStatus />)
-    await user.type(screen.getByLabelText(/application id/i), 'doesnotexist')
+    await user.type(screen.getByLabelText(/application reference id/i), 'doesnotexist')
     await user.click(screen.getByRole('button', { name: /check status/i }))
     expect(await screen.findByText(/no application found/i)).toBeInTheDocument()
   })
 
-  it('renders real status data for a valid ID', async () => {
+  it('renders real status data and 5-stage timeline for a valid ID', async () => {
     const user = userEvent.setup()
     client.get.mockResolvedValueOnce({
       data: {
-        id: 'f9a6d523', readiness_score: 90, status: 'submitted',
+        id: 'f9a6d523', citizen_name: 'Rahul Kumar', service_type: 'income_certificate',
+        readiness_score: 90, status: 'READY_FOR_REVIEW',
+        average_ocr_confidence: 95,
+        estimated_delay_days: '2-3',
         missing_documents: ['residence_proof'],
         field_checks: [{ field: 'name', status: 'pass', detail: 'Matches across documents' }],
       },
     })
     render(<CheckStatus />)
-    await user.type(screen.getByLabelText(/application id/i), 'f9a6d523')
+    await user.type(screen.getByLabelText(/application reference id/i), 'f9a6d523')
     await user.click(screen.getByRole('button', { name: /check status/i }))
     expect(await screen.findByText('90%')).toBeInTheDocument()
     expect(screen.getByText(/residence proof/i)).toBeInTheDocument()
+    expect(screen.getByText('1. Submitted')).toBeInTheDocument()
+    expect(screen.getByText('4. Officer Review')).toBeInTheDocument()
+  })
+
+  it('displays correction details and resubmission form when status is NEEDS_CORRECTION', async () => {
+    const user = userEvent.setup()
+    client.get.mockResolvedValueOnce({
+      data: {
+        id: 'corr123', citizen_name: 'Rahul Kumar', service_type: 'income_certificate',
+        readiness_score: 55, status: 'NEEDS_CORRECTION',
+        average_ocr_confidence: 88,
+        estimated_delay_days: '4-5',
+        correction_reason: 'Address Mismatch',
+        correction_details: 'Electricity bill address does not match Aadhaar.',
+        missing_documents: [],
+        field_checks: [{ field: 'address', status: 'fail', detail: 'Mismatch' }],
+      },
+    })
+    render(<CheckStatus />)
+    await user.type(screen.getByLabelText(/application reference id/i), 'corr123')
+    await user.click(screen.getByRole('button', { name: /check status/i }))
+    expect(await screen.findByText(/Address Mismatch/i)).toBeInTheDocument()
+    expect(screen.getByText(/Electricity bill address does not match Aadhaar/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /submit corrected documents/i })).toBeInTheDocument()
   })
 })

@@ -48,10 +48,10 @@ describe('OfficerQueue', () => {
     expect(screen.getByText(/75%/)).toBeInTheDocument()
   })
 
-  it('expands a row to show detail (including score reasoning and audit trail) and can resolve it', async () => {
+  it('expands a row to show detail (including score reasoning and audit trail) and can approve it', async () => {
     const user = userEvent.setup()
     client.get.mockResolvedValueOnce({
-      data: [{ id: 'app1', citizen_name: 'Rahul Kumar', service_type: 'income_certificate', readiness_score: 75, duplicate_suspected: false, status: 'submitted' }],
+      data: [{ id: 'app1', citizen_name: 'Rahul Kumar', service_type: 'income_certificate', readiness_score: 75, duplicate_suspected: false, status: 'READY_FOR_REVIEW' }],
     })
     client.get.mockResolvedValueOnce({ data: baseDetail }) // detail
     client.get.mockResolvedValueOnce({ data: [{ event_type: 'Uploaded', detail: '3 documents', created_at: '2026-08-03T10:10:00' }] }) // audit
@@ -60,32 +60,27 @@ describe('OfficerQueue', () => {
     await loginAsOfficer(user)
     await user.click(await screen.findByText(/rahul kumar/i))
 
-    expect(await screen.findByText(/fix the address/i)).toBeInTheDocument()
+    expect(await screen.findByText('Extracted Field Verification & Coherence Matrix:')).toBeInTheDocument()
     expect(screen.getByText('Test penalty')).toBeInTheDocument()
-    expect(screen.getByText(/94.5%/)).toBeInTheDocument()
+    expect(screen.getAllByText(/94.5%/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText(/uploaded/i)).toBeInTheDocument()
 
-    client.post.mockResolvedValueOnce({ data: { id: 'app1', status: 'resolved' } })
-    // After resolving, the row drops out of view by default (showResolved
-    // is off, same as the Streamlit original) — check the box first, same
-    // as a real user would, to actually see the updated state.
+    client.post.mockResolvedValueOnce({ data: { id: 'app1', status: 'APPROVED', resolved_by: 'Suresh' } })
     client.get.mockResolvedValueOnce({
-      data: [{ id: 'app1', citizen_name: 'Rahul Kumar', service_type: 'income_certificate', readiness_score: 75, duplicate_suspected: false, status: 'resolved' }],
+      data: [{ id: 'app1', citizen_name: 'Rahul Kumar', service_type: 'income_certificate', readiness_score: 75, duplicate_suspected: false, status: 'APPROVED' }],
     })
-    client.get.mockResolvedValueOnce({ data: { ...baseDetail, status: 'resolved', resolved_by: 'Suresh' } })
+    client.get.mockResolvedValueOnce({ data: { ...baseDetail, status: 'APPROVED', resolved_by: 'Suresh' } })
 
-    await user.click(screen.getByRole('button', { name: /mark as reviewed/i }))
-    expect(client.post).toHaveBeenCalledWith('/api/applications/app1/resolve')
-
-    await user.click(screen.getByLabelText(/show resolved/i))
-    expect(await screen.findByText(/resolved by suresh/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /approve application/i }))
+    expect(client.post).toHaveBeenCalledWith('/api/applications/app1/approve', { notes: 'Approved by statutory review.' })
+    expect(await screen.findByText(/authorized by suresh/i)).toBeInTheDocument()
   })
 
-  it('an Administrator does not see the resolve button', async () => {
+  it('an Administrator does not see officer action buttons', async () => {
     const user = userEvent.setup()
     client.post.mockResolvedValueOnce({ data: { access_token: 'tok', name: 'Priya', role: 'Administrator' } })
     client.get.mockResolvedValueOnce({
-      data: [{ id: 'app1', citizen_name: 'Rahul Kumar', service_type: 'income_certificate', readiness_score: 75, duplicate_suspected: false, status: 'submitted' }],
+      data: [{ id: 'app1', citizen_name: 'Rahul Kumar', service_type: 'income_certificate', readiness_score: 75, duplicate_suspected: false, status: 'READY_FOR_REVIEW' }],
     })
     client.get.mockResolvedValueOnce({ data: baseDetail })
     client.get.mockResolvedValueOnce({ data: [] }) // audit
@@ -96,6 +91,7 @@ describe('OfficerQueue', () => {
     await user.click(screen.getByRole('button', { name: /log in/i }))
 
     await user.click(await screen.findByText(/rahul kumar/i))
-    await waitFor(() => expect(screen.queryByRole('button', { name: /mark as reviewed/i })).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByRole('button', { name: /approve application/i })).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /request correction/i })).not.toBeInTheDocument()
   })
 })

@@ -218,13 +218,13 @@ Steps, once you're ready:
 ## Running Tests
 
 ```bash
-# backend — 20 tests, needs the synthetic documents to exist first
+# backend — 32 tests, exercises full pipeline including PDF, multi-page, RBAC, RAG & limits
 cd backend
 pip install -r requirements.txt
 python -m app.generate_test_documents
 pytest tests/ -v
 
-# frontend — 21 tests
+# frontend — 24 tests across 5 test files
 cd frontend-react
 npm install
 npx vitest run
@@ -236,20 +236,21 @@ Both suites also run automatically on every push via GitHub Actions (`.github/wo
 
 | Tool | Purpose |
 |---|---|
-| Docker Desktop | Builds and runs the containerized backend |
+| Docker Desktop | Builds and runs the containerized backend and frontend |
 | Python 3.11 | Backend language runtime |
 | `uvicorn` | ASGI server running the FastAPI app |
+| `pypdfium2` | High-fidelity PDF page rendering (~144 DPI) for multi-page document ingestion |
+| `pytesseract` + system `tesseract-ocr` | OCR extraction from uploaded document images and PDF pages |
 | `rapidfuzz` | Fuzzy string matching for the consistency engine and duplicate check |
-| `pytesseract` + system `tesseract-ocr` | OCR extraction from uploaded document images |
-| SQLite | Local, file-based database — no separate DB server to install |
+| SQLite | Local, file-based database with automatic schema column upgrades |
 | Node.js 20 + npm | Builds and runs the React frontend |
 | Streamlit *(legacy, optional)* | Original reference frontend — not part of the Docker stack, kept for comparison |
-| GitHub CLI (`gh`) *(optional)* | Used by `scripts/create_github_issues.sh` to bulk-create the 25 user stories as GitHub Issues |
+| GitHub CLI (`gh`) *(optional)* | Used by `scripts/create_github_issues.sh` to bulk-create the user stories as GitHub Issues |
 
 ## Repository Structure
 
 ```
-sevasetu-starter/
+sevasetu-final/
 ├── README.md
 ├── docker-compose.yml
 ├── docker-compose.postgres.yml     # Optional Postgres override — verified against a real instance
@@ -259,50 +260,48 @@ sevasetu-starter/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── app/
-│       ├── main.py                     # FastAPI app: applications, ask, feedback, officer-stats endpoints
-│       ├── database.py                 # SQLAlchemy session setup
-│       ├── models.py                   # Application, DocumentRecord, FieldMismatch, Feedback tables
-│       ├── generate_test_documents.py  # Creates synthetic demo documents with an injected mismatch
+│       ├── main.py                     # FastAPI app: applications, ask, feedback, staff, officer-stats endpoints
+│       ├── database.py                 # SQLAlchemy session setup with auto-upgrade SQLite migrations
+│       ├── models.py                   # Application, DocumentRecord, FieldMismatch, AuditEvent, StaffUser, Feedback
+│       ├── generate_test_documents.py  # Creates synthetic demo PNG and multi-page PDF documents
 │       ├── regulation_corpus.py        # Illustrative regulation text the RAG assistant retrieves from
 │       ├── pipeline/
-│       │   ├── ocr.py            # Tesseract wrapper
-│       │   ├── extraction.py     # Raw OCR text -> structured fields
+│       │   ├── ocr.py            # Tesseract + pypdfium2 multi-page PDF ingestion with configurable limits
+│       │   ├── fields.py         # Raw OCR text -> structured fields (Name, DOB, Address)
 │       │   ├── consistency.py    # Cross-document fuzzy matching (the core differentiator)
 │       │   ├── checklist.py      # Required-documents lookup per service type
 │       │   ├── duplicates.py     # Fuzzy-matches against past applications
 │       │   ├── scoring.py        # Aggregates everything into one readiness score
-│       │   ├── rag.py            # Hybrid BM25 + TF-IDF retrieval, fused via RRF — no API/model download needed
-│       │   ├── generation.py     # Optional Ollama generation layer on top of retrieval — untested by me, see note above
+│       │   ├── rag.py            # Hybrid BM25 + TF-IDF retrieval, fused via RRF (offline fallback)
+│       │   ├── generation.py     # Optional Ollama generation layer on top of retrieval
 │       │   ├── sentiment.py      # VADER sentiment analysis, fully local
 │       │   └── report.py         # PDF verification report generation (ReportLab)
 │       └── static/
 │           └── index.html
-├── backend/tests/                  # pytest suite — 20 tests, see "Running Tests" below
+├── backend/tests/                  # pytest suite — 32 tests (100% pass)
 ├── .github/workflows/ci.yml        # GitHub Actions: backend tests, frontend tests+build, both Docker images
-├── frontend-react/                 # The deployed frontend — all 7 pages, React + Vite
+├── frontend-react/                 # The deployed frontend — React + Vite
 │   ├── Dockerfile
 │   ├── package.json
 │   └── src/
-│       ├── App.jsx                       # Routing for all 7 pages
+│       ├── App.jsx                       # Routing for all pages
 │       ├── main.jsx
 │       ├── index.css                     # Design tokens — civic-trust palette, not a generic template
-│       ├── config.js                     # Mirrors the old Streamlit config.py's SERVICE_TYPES
-│       ├── api/client.js                 # Axios instance, auto-attaches the staff JWT when present
+│       ├── config.js                     # Service configurations and document types
+│       ├── api/client.js                 # Axios instance, auto-attaches staff JWT token
 │       ├── context/AuthContext.jsx       # Login state, persisted to localStorage
-│       ├── components/Layout.jsx         # Sidebar nav
-│       ├── components/StaffGate.jsx      # Shared login + role gate for the 3 staff pages
-│       ├── pages/CitizenUpload.jsx       # Apply: upload flow + readiness result
+│       ├── components/Layout.jsx         # Civic header topbar and categorized navigation
+│       ├── components/StaffGate.jsx      # Shared login + role gate for staff pages
+│       ├── pages/CitizenUpload.jsx       # Apply: multi-format upload flow + readiness centerpiece
 │       ├── pages/CheckStatus.jsx         # Citizen: look up a submitted application by ID
-│       ├── pages/AskQuestion.jsx         # Citizen: regulation Q&A
-│       ├── pages/Feedback.jsx            # Citizen: feedback submission
-│       ├── pages/OfficerQueue.jsx        # Officer: queue, filter/search, resolve
+│       ├── pages/AskQuestion.jsx         # Citizen: regulation Q&A assistant
+│       ├── pages/Feedback.jsx            # Citizen: grievance & feedback submission
+│       ├── pages/OfficerQueue.jsx        # Officer: queue, KPI cards, filter/search, resolve
 │       ├── pages/OfficerDashboard.jsx    # Officer/Admin: productivity + feedback insights
-│       ├── pages/AdminSettings.jsx       # Administrator-only: edit required-documents checklist
-│       └── tests/                        # 21 tests across 5 files — validation, real API calls, role gating both directions, error handling
-├── frontend/                       # Legacy Streamlit build — not deleted, not deployed. Same 7 pages, kept for reference/comparison.
-├── docs/
-│   ├── user_stories_moscow.md
-│   └── wireframes_spec.md
+│       ├── pages/AdminSettings.jsx       # Admin: edit required-documents checklist rules
+│       ├── pages/ManageStaff.jsx         # Admin: provision & manage staff accounts
+│       └── tests/                        # 24 tests across 5 files — validation, PDF badges, role gating, resolve
+├── frontend/                       # Legacy Streamlit build — kept for reference
 └── scripts/
     └── create_github_issues.sh
 ```

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CitizenUpload from '../pages/CitizenUpload'
 import client from '../api/client'
@@ -9,30 +9,74 @@ vi.mock('../api/client')
 describe('CitizenUpload', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    client.get.mockResolvedValue({
+      data: [
+        {
+          id: 'income_certificate',
+          name: 'Income Certificate',
+          category: 'Revenue & Welfare',
+          description: 'Proof of family annual income',
+          required_documents: [
+            { key: 'aadhaar', label: 'Aadhaar Card', is_required: true },
+            { key: 'ration_card', label: 'Ration Card', is_required: true },
+            { key: 'electricity_bill', label: 'Electricity Bill', is_required: true },
+            { key: 'residence_proof', label: 'Residence Proof', is_required: true },
+          ],
+        },
+        {
+          id: 'domicile_certificate',
+          name: 'Domicile Certificate',
+          category: 'Citizenship & Residence',
+          description: 'Proof of permanent state residency',
+          required_documents: [
+            { key: 'aadhaar', label: 'Aadhaar Card', is_required: true },
+            { key: 'residence_proof', label: 'Residence Proof', is_required: true },
+            { key: 'birth_certificate', label: 'Birth Certificate', is_required: true },
+          ],
+        },
+      ],
+    })
   })
 
-  it('renders the form with all 4 required documents for the default service', () => {
+  it('renders the service catalog selector and required documents for the default service', async () => {
     render(<CitizenUpload />)
-    expect(screen.getByLabelText('Your full name')).toBeInTheDocument()
-    expect(screen.getByLabelText('Aadhaar card')).toBeInTheDocument()
-    expect(screen.getByLabelText('Ration card')).toBeInTheDocument()
-    expect(screen.getByLabelText('Electricity bill')).toBeInTheDocument()
-    expect(screen.getByLabelText('Residence proof')).toBeInTheDocument()
+    expect(await screen.findByText('1. Select Government Service')).toBeInTheDocument()
+    expect(screen.getByText('Income Certificate')).toBeInTheDocument()
+    expect(screen.getByText('Domicile Certificate')).toBeInTheDocument()
+    expect(screen.getByLabelText(/Your Full Name/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Aadhaar Card/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Ration Card/i)).toBeInTheDocument()
+  })
+
+  it('filters services when typing in search box', async () => {
+    const user = userEvent.setup()
+    render(<CitizenUpload />)
+    const searchInput = screen.getByPlaceholderText(/Search services/i)
+    await user.type(searchInput, 'Domicile')
+    expect(screen.getByText('Domicile Certificate')).toBeInTheDocument()
+  })
+
+  it('changes required documents when selecting another service', async () => {
+    const user = userEvent.setup()
+    render(<CitizenUpload />)
+    const domicileCard = screen.getByText('Domicile Certificate')
+    await user.click(domicileCard)
+    expect(await screen.findByLabelText(/Birth Certificate/i)).toBeInTheDocument()
   })
 
   it('shows a validation error instead of submitting when name is empty', async () => {
     const user = userEvent.setup()
     render(<CitizenUpload />)
-    await user.click(screen.getByRole('button', { name: /check my application/i }))
-    expect(await screen.findByText(/please enter your name/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /check my/i }))
+    expect(await screen.findByText(/please enter your full name/i)).toBeInTheDocument()
     expect(client.post).not.toHaveBeenCalled()
   })
 
   it('shows a validation error when no documents are attached', async () => {
     const user = userEvent.setup()
     render(<CitizenUpload />)
-    await user.type(screen.getByLabelText('Your full name'), 'Rahul Kumar')
-    await user.click(screen.getByRole('button', { name: /check my application/i }))
+    await user.type(screen.getByLabelText(/Your Full Name/i), 'Rahul Kumar')
+    await user.click(screen.getByRole('button', { name: /check my/i }))
     expect(await screen.findByText(/please upload at least one document/i)).toBeInTheDocument()
     expect(client.post).not.toHaveBeenCalled()
   })
@@ -63,12 +107,13 @@ describe('CitizenUpload', () => {
     })
 
     render(<CitizenUpload />)
-    await user.type(screen.getByLabelText('Your full name'), 'Rahul Kumar')
+    await user.type(screen.getByLabelText(/Your Full Name/i), 'Rahul Kumar')
 
     const fakeFile = new File(['fake-image-content'], 'aadhaar.png', { type: 'image/png' })
-    await user.upload(screen.getByLabelText('Aadhaar card'), fakeFile)
+    const fileInput = screen.getByLabelText(/Aadhaar Card/i)
+    fireEvent.change(fileInput, { target: { files: [fakeFile] } })
 
-    await user.click(screen.getByRole('button', { name: /check my application/i }))
+    await user.click(screen.getByRole('button', { name: /check my/i }))
 
     await waitFor(() => expect(client.post).toHaveBeenCalledTimes(1))
 
@@ -83,21 +128,43 @@ describe('CitizenUpload', () => {
     // Verify the real response renders correctly
     expect(await screen.findByText('75%')).toBeInTheDocument()
     expect(screen.getByText(/needs attention/i)).toBeInTheDocument()
-    expect(screen.getByText(/aadhaar lists "12 mg road"/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/aadhaar lists "12 mg road"/i)[0]).toBeInTheDocument()
     expect(screen.getByText('3-5 days')).toBeInTheDocument()
     expect(screen.getByText('test1234')).toBeInTheDocument()
   })
 
-  it('shows the backend error message when the request fails', async () => {
+  it('shows the backend error message when the request fails with 400', async () => {
     const user = userEvent.setup()
-    client.post.mockRejectedValueOnce({ response: { data: { detail: 'At least one document must be uploaded' } } })
+    client.post.mockRejectedValueOnce({ response: { data: { detail: 'Residence proof is required.' } } })
 
     render(<CitizenUpload />)
-    await user.type(screen.getByLabelText('Your full name'), 'Rahul Kumar')
+    await user.type(screen.getByLabelText(/Your Full Name/i), 'Rahul Kumar')
     const fakeFile = new File(['x'], 'aadhaar.png', { type: 'image/png' })
-    await user.upload(screen.getByLabelText('Aadhaar card'), fakeFile)
-    await user.click(screen.getByRole('button', { name: /check my application/i }))
+    const fileInput = screen.getByLabelText(/Aadhaar Card/i)
+    fireEvent.change(fileInput, { target: { files: [fakeFile] } })
+    await user.click(screen.getByRole('button', { name: /check my/i }))
 
-    expect(await screen.findByText('At least one document must be uploaded')).toBeInTheDocument()
+    expect(await screen.findByText('Residence proof is required.')).toBeInTheDocument()
+  })
+
+  it('supports PDF upload and displays PDF document badge', async () => {
+    render(<CitizenUpload />)
+    const fakePdf = new File(['%PDF-1.4 sample content'], 'aadhaar.pdf', { type: 'application/pdf' })
+    const fileInput = screen.getByLabelText(/Aadhaar Card/i)
+    fireEvent.change(fileInput, { target: { files: [fakePdf] } })
+
+    expect(await screen.findByText('PDF DOCUMENT')).toBeInTheDocument()
+    expect(screen.getByText(/Multi-page supported/i)).toBeInTheDocument()
+  })
+
+  it('rejects unsupported file formats before submission', async () => {
+    render(<CitizenUpload />)
+
+    const invalidFile = new File(['binary'], 'virus.exe', { type: 'application/x-msdownload' })
+    const fileInput = screen.getByLabelText(/Aadhaar Card/i)
+    fireEvent.change(fileInput, { target: { files: [invalidFile] } })
+
+    expect(await screen.findByText(/invalid file format/i)).toBeInTheDocument()
+    expect(client.post).not.toHaveBeenCalled()
   })
 })

@@ -20,8 +20,13 @@ class Application(Base):
     estimated_delay_days = Column(String, nullable=True)
     recommendation = Column(String, nullable=True)
     missing_documents = Column(String, nullable=True)  # comma-separated, simplest for an MVP
-    status = Column(String, default="submitted")  # submitted | reviewed | resolved
-    resolved_by = Column(String, nullable=True)  # officer name — demo-level attribution, not tied to real auth
+    status = Column(String, default="READY_FOR_REVIEW")  # SUBMITTED | PROCESSING | READY_FOR_REVIEW | NEEDS_CORRECTION | RESUBMITTED | UNDER_REVIEW | APPROVED | REJECTED | resolved
+    resolved_by = Column(String, nullable=True)  # officer name / username attribution
+    correction_reason = Column(String, nullable=True)  # e.g. "Address Mismatch", "Missing Document", "Blurry/Unreadable Document"
+    correction_details = Column(String, nullable=True)  # Specific officer instructions to citizen
+    correction_requested_by = Column(String, nullable=True)  # Officer who requested correction
+    correction_requested_at = Column(DateTime(timezone=True), nullable=True)
+    resubmitted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     resolved_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -43,7 +48,11 @@ class DocumentRecord(Base):
 
     id = Column(String, primary_key=True, index=True)
     application_id = Column(String, index=True, nullable=False)
-    doc_type = Column(String, nullable=False)  # e.g. aadhaar, ration_card, electricity_bill
+    doc_type = Column(String, nullable=False)  # expected slot type, e.g. aadhaar, ration_card, electricity_bill
+    detected_type = Column(String, nullable=True)  # classified type from OCR content
+    type_confidence = Column(Float, nullable=True)  # 0.0 - 1.0 classifier confidence
+    type_status = Column(String, nullable=True)  # MATCH | LIKELY_MATCH | UNCERTAIN | MISMATCH
+    type_evidence = Column(String, nullable=True)  # JSON-encoded array of matched evidence strings
     ocr_text = Column(String, nullable=True)
     ocr_confidence = Column(Float, nullable=True)  # average word-level confidence, 0-100
 
@@ -109,3 +118,18 @@ class RequiredDocument(Base):
     id = Column(String, primary_key=True, index=True)
     service_type = Column(String, nullable=False, index=True)
     document_type = Column(String, nullable=False)
+
+
+class ServiceDefinition(Base):
+    """
+    Centralized civic service catalog definition.
+    Defines name, description, category, and activation status for all government services.
+    """
+    __tablename__ = "services"
+
+    id = Column(String, primary_key=True, index=True)  # e.g. income_certificate, domicile_certificate
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    category = Column(String, default="Certificates", nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
