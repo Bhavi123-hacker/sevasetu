@@ -296,9 +296,9 @@ def seed_demo_accounts_if_empty(db, models) -> None:
         return
 
     import uuid
-    officer_password = os.getenv("OFFICER_DEMO_PASSWORD", "seva123")
-    senior_password = os.getenv("SENIOR_OFFICER_DEMO_PASSWORD", "seva123")
-    admin_password = os.getenv("ADMIN_DEMO_PASSWORD", "seva123")
+    officer_password = os.getenv("OFFICER_DEMO_PASSWORD", "officer-demo-pass")
+    senior_password = os.getenv("SENIOR_OFFICER_DEMO_PASSWORD", "senior-demo-pass")
+    admin_password = os.getenv("ADMIN_DEMO_PASSWORD", "admin-demo-pass")
 
     existing_users = {u.username: u for u in db.query(models.StaffUser).all()}
 

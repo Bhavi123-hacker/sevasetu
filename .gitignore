@@ -31,3 +31,9 @@ dist/
 build/
 .next/
 firebase-service-account.json
+# Local/runtime generated data
+data/
+backend/data/chroma/
+backend/data/*.pkl
+backend/tests/test.db
+frontend-react-backup/

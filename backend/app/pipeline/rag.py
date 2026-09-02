@@ -96,6 +96,8 @@ def _get_bm25_index():
 
 def index_corpus() -> None:
     """Fits TF-IDF on the corpus and loads it into Chroma. Safe to re-run."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
     texts = [chunk["text"] for chunk in INCOME_CERTIFICATE_CORPUS]
     ids = [chunk["id"] for chunk in INCOME_CERTIFICATE_CORPUS]
 
