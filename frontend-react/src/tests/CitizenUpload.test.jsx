@@ -9,6 +9,7 @@ vi.mock('../api/client')
 describe('CitizenUpload', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.setItem('sevasetu_citizen_token', 'test-citizen-jwt')
     client.get.mockResolvedValue({
       data: [
         {

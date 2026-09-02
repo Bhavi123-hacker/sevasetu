@@ -18,25 +18,6 @@ OFFICER_PASSWORD = os.getenv("OFFICER_DEMO_PASSWORD", "officer-demo-pass")
 ADMIN_PASSWORD = os.getenv("ADMIN_DEMO_PASSWORD", "admin-demo-pass")
 
 
-@pytest.fixture
-def client():
-    return TestClient(app)
-
-
-@pytest.fixture
-def officer_token(client):
-    clear_failed_attempts("officer1")
-    r = client.post("/api/auth/login", json={"username": "officer1", "password": OFFICER_PASSWORD})
-    return r.json()["access_token"]
-
-
-@pytest.fixture
-def admin_token(client):
-    clear_failed_attempts("admin1")
-    r = client.post("/api/auth/login", json={"username": "admin1", "password": ADMIN_PASSWORD})
-    return r.json()["access_token"]
-
-
 def _submit_full_bundle(client, citizen_name="Rahul Kumar"):
     with open(TEST_DOCS / "aadhaar.png", "rb") as f1, \
          open(TEST_DOCS / "ration_card.png", "rb") as f2, \
@@ -192,7 +173,9 @@ def test_admin_can_edit_checklist_officer_cannot(client, officer_token, admin_to
 def test_pdf_report_downloads_as_a_real_pdf(client):
     app_r = _submit_full_bundle(client, citizen_name="PDF Test Person")
     app_id = app_r.json()["application_id"]
-    r = client.get(f"/api/applications/{app_id}/report.pdf")
+    token = app_r.json().get("tracking_token")
+    url = f"/api/applications/{app_id}/report.pdf" + (f"?token={token}" if token else "")
+    r = client.get(url)
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/pdf"
     assert r.content[:4] == b"%PDF"
@@ -451,10 +434,12 @@ def test_officer_request_correction_and_citizen_resubmit_workflow(client, office
     assert detail["correction_reason"] == "Address Mismatch"
     assert "updated Aadhaar" in detail["correction_details"]
 
-    # 4. Citizen resubmits replacement documents
+    # 4. Citizen resubmits replacement documents with tracking token
+    tracking_token = app_r.json().get("tracking_token")
+    url_resub = f"/api/applications/{app_id}/resubmit" + (f"?token={tracking_token}" if tracking_token else "")
     with open(TEST_DOCS / "aadhaar.png", "rb") as f_resub:
         r_resubmit = client.post(
-            f"/api/applications/{app_id}/resubmit",
+            url_resub,
             files={"aadhaar": ("aadhaar_clean.png", f_resub, "image/png")},
         )
     assert r_resubmit.status_code == 200
@@ -466,10 +451,34 @@ def test_officer_request_correction_and_citizen_resubmit_workflow(client, office
     r_status_after = client.get(f"/api/applications/{app_id}", headers={"Authorization": f"Bearer {officer_token}"})
     assert r_status_after.json()["status"] == "READY_FOR_REVIEW"
 
-    # 6. Officer approves application
+    # 5a. Attempting approval directly from READY_FOR_REVIEW must be rejected
+    r_direct_appr = client.post(
+        f"/api/applications/{app_id}/approve",
+        json={"notes": "Direct approval attempt"},
+        headers={"Authorization": f"Bearer {officer_token}"},
+    )
+    assert r_direct_appr.status_code == 400
+
+    # 5b. Officer passes document review -> advances to INTERVIEW_ELIGIBLE
+    r_pass_doc = client.post(
+        f"/api/applications/{app_id}/document-review-pass",
+        json={"notes": "Documents verified coherent."},
+        headers={"Authorization": f"Bearer {officer_token}"},
+    )
+    assert r_pass_doc.status_code == 200
+    assert r_pass_doc.json()["status"] == "INTERVIEW_ELIGIBLE"
+
+    # 5c. Citizen conducts and completes interview
+    r_intv = client.post("/api/interviews/start", json={"application_id": app_id})
+    assert r_intv.status_code == 200
+    session_id = r_intv.json()["session_id"]
+    r_intv_comp = client.post(f"/api/interviews/{session_id}/complete")
+    assert r_intv_comp.status_code == 200
+
+    # 6. Officer approves application from FINAL_OFFICER_REVIEW / INTERVIEW_COMPLETED
     r_approve = client.post(
         f"/api/applications/{app_id}/approve",
-        json={"notes": "All documents verified coherent."},
+        json={"notes": "All documents and interview verified coherent."},
         headers={"Authorization": f"Bearer {officer_token}"},
     )
     assert r_approve.status_code == 200

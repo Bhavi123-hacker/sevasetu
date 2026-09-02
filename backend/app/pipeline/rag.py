@@ -28,6 +28,7 @@ transformer model — no downloads, no API calls, no rate limit to ever
 hit, which is also just a better fit for the free-tier constraint this
 project runs under.
 """
+import re
 import pickle
 from pathlib import Path
 
@@ -47,6 +48,23 @@ _client = None
 _collection = None
 _bm25_index = None
 _bm25_doc_ids = None
+
+
+def sanitize_rag_query(query: str) -> str:
+    """
+    Sanitizes citizen query to neutralize prompt injection phrases and control characters.
+    """
+    cleaned = query.strip()
+    injection_patterns = [
+        r"(?i)\bignore\s+(all\s+)?(previous|prior|above)\s+instructions\b",
+        r"(?i)\bsystem\s+prompt\b",
+        r"(?i)\byou\s+are\s+now\b",
+        r"(?i)\bdisregard\s+(all\s+)?rules\b",
+        r"(?i)\boutput\s+the\s+following\s+text\b",
+    ]
+    for pattern in injection_patterns:
+        cleaned = re.sub(pattern, "[sanitized]", cleaned)
+    return cleaned
 
 
 def _get_collection():
@@ -137,8 +155,9 @@ def answer_question(query: str, top_k: int = 1) -> list[dict]:
     if not VECTORIZER_PATH.exists():
         index_corpus()
 
-    tfidf_ranking = _tfidf_full_ranking(query)
-    bm25_ranking = _bm25_full_ranking(query)
+    clean_query = sanitize_rag_query(query)
+    tfidf_ranking = _tfidf_full_ranking(clean_query)
+    bm25_ranking = _bm25_full_ranking(clean_query)
     # BM25 first: when the two rankers tie exactly (e.g. one ranks a doc
     # #1/#2 and the other ranks it #2/#1 — a perfectly symmetric
     # disagreement), RRF's summed score is IDENTICAL for both docs, and

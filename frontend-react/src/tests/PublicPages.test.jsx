@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import AskQuestion from '../pages/AskQuestion'
 import Feedback from '../pages/Feedback'
 import CheckStatus from '../pages/CheckStatus'
@@ -21,7 +22,11 @@ describe('AskQuestion', () => {
       },
     })
 
-    render(<AskQuestion />)
+    render(
+      <MemoryRouter>
+        <AskQuestion />
+      </MemoryRouter>
+    )
     await user.type(screen.getByLabelText(/what do you want to know/i), 'is there a fee')
     await user.click(screen.getByRole('button', { name: 'Ask' }))
 
@@ -40,7 +45,11 @@ describe('AskQuestion', () => {
         generated_answer: 'No, first-time applications are free.',
       },
     })
-    render(<AskQuestion />)
+    render(
+      <MemoryRouter>
+        <AskQuestion />
+      </MemoryRouter>
+    )
     await user.type(screen.getByLabelText(/what do you want to know/i), 'is there a fee')
     await user.click(screen.getByRole('button', { name: 'Ask' }))
     expect(await screen.findByText('No, first-time applications are free.')).toBeInTheDocument()
@@ -51,20 +60,35 @@ describe('AskQuestion', () => {
 describe('Feedback', () => {
   it('requires text before submitting', async () => {
     const user = userEvent.setup()
-    render(<Feedback />)
+    render(
+      <MemoryRouter>
+        <Feedback />
+      </MemoryRouter>
+    )
     await user.click(screen.getByRole('button', { name: /submit feedback/i }))
-    expect(await screen.findByText(/please write something/i)).toBeInTheDocument()
+    expect(await screen.findByText(/please provide feedback details/i)).toBeInTheDocument()
     expect(client.post).not.toHaveBeenCalled()
   })
 
   it('submits with optional fields correctly nulled when blank', async () => {
     const user = userEvent.setup()
-    client.post.mockResolvedValueOnce({ data: { id: 'fb1', sentiment_label: 'positive', sentiment_score: 0.7 } })
-    render(<Feedback />)
-    await user.type(screen.getByLabelText(/your feedback/i), 'Great experience!')
+    client.post.mockResolvedValueOnce({ data: { id: 'fb1', sentiment_label: 'positive', sentiment_score: 0.7, message: 'Feedback recorded successfully.' } })
+    render(
+      <MemoryRouter>
+        <Feedback />
+      </MemoryRouter>
+    )
+    await user.type(screen.getByLabelText(/your comments/i), 'Great experience!')
     await user.click(screen.getByRole('button', { name: /submit feedback/i }))
-    expect(client.post).toHaveBeenCalledWith('/api/feedback', { text: 'Great experience!', citizen_name: null, application_id: null })
-    expect(await screen.findByText(/thanks/i)).toBeInTheDocument()
+    expect(client.post).toHaveBeenCalledWith('/api/feedback', {
+      text: 'Great experience!',
+      rating: 5,
+      category: 'EASE_OF_APPLICATION',
+      citizen_name: null,
+      application_id: null,
+      grievance_id: null,
+    })
+    expect(await screen.findByText(/feedback recorded successfully/i)).toBeInTheDocument()
   })
 })
 
@@ -72,13 +96,17 @@ describe('CheckStatus', () => {
   it('shows a clear error for an unknown application ID', async () => {
     const user = userEvent.setup()
     client.get.mockRejectedValueOnce({ response: { status: 404 } })
-    render(<CheckStatus />)
+    render(
+      <MemoryRouter>
+        <CheckStatus />
+      </MemoryRouter>
+    )
     await user.type(screen.getByLabelText(/application reference id/i), 'doesnotexist')
     await user.click(screen.getByRole('button', { name: /check status/i }))
     expect(await screen.findByText(/no application found/i)).toBeInTheDocument()
   })
 
-  it('renders real status data and 5-stage timeline for a valid ID', async () => {
+  it('renders real status data and 6-stage timeline for a valid ID', async () => {
     const user = userEvent.setup()
     client.get.mockResolvedValueOnce({
       data: {
@@ -90,13 +118,17 @@ describe('CheckStatus', () => {
         field_checks: [{ field: 'name', status: 'pass', detail: 'Matches across documents' }],
       },
     })
-    render(<CheckStatus />)
+    render(
+      <MemoryRouter>
+        <CheckStatus />
+      </MemoryRouter>
+    )
     await user.type(screen.getByLabelText(/application reference id/i), 'f9a6d523')
     await user.click(screen.getByRole('button', { name: /check status/i }))
     expect(await screen.findByText('90%')).toBeInTheDocument()
     expect(screen.getByText(/residence proof/i)).toBeInTheDocument()
-    expect(screen.getByText('1. Submitted')).toBeInTheDocument()
-    expect(screen.getByText('4. Officer Review')).toBeInTheDocument()
+    expect(screen.getByText('Submitted')).toBeInTheDocument()
+    expect(screen.getByText('Officer Review')).toBeInTheDocument()
   })
 
   it('displays correction details and resubmission form when status is NEEDS_CORRECTION', async () => {
@@ -113,11 +145,16 @@ describe('CheckStatus', () => {
         field_checks: [{ field: 'address', status: 'fail', detail: 'Mismatch' }],
       },
     })
-    render(<CheckStatus />)
+    render(
+      <MemoryRouter>
+        <CheckStatus />
+      </MemoryRouter>
+    )
     await user.type(screen.getByLabelText(/application reference id/i), 'corr123')
     await user.click(screen.getByRole('button', { name: /check status/i }))
-    expect(await screen.findByText(/Address Mismatch/i)).toBeInTheDocument()
-    expect(screen.getByText(/Electricity bill address does not match Aadhaar/i)).toBeInTheDocument()
+    const mismatchElements = await screen.findAllByText(/Address Mismatch/i)
+    expect(mismatchElements.length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Electricity bill address does not match Aadhaar/i).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /submit corrected documents/i })).toBeInTheDocument()
   })
 })

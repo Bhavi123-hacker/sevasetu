@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=sevasetu
+      - POSTGRES_PASSWORD=sevasetu_secure_pass
+      - POSTGRES_DB=sevasetu
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sevasetu -d sevasetu"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -7,35 +24,43 @@ services:
       - "8000:8000"
     volumes:
       - sevasetu_data:/app/data
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro
     environment:
       - DATABASE_URL=sqlite:///./data/sevasetu.db
+      - POSTGRES_DATABASE_URL=postgresql://sevasetu:sevasetu_secure_pass@postgres:5432/sevasetu
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=llama3.2:1b
       - JWT_SECRET_KEY=dev-only-secret-change-before-any-real-deployment
       - OFFICER_DEMO_PASSWORD=seva123
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-}
+      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL:-}
+      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY:-}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-SevaSetu <onboarding@resend.dev>}
+      - AUTH_MODE=${AUTH_MODE:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      # python3, not curl — python:3.11-slim doesn't ship curl by default,
-      # but the Python runtime is guaranteed to be there.
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 10s
 
-  # React is now the only active frontend — full feature parity with
-  # the old Streamlit app across all 7 pages, tested (21 component
-  # tests, see frontend-react/src/tests/). The Streamlit code is still
-  # in frontend/ but deliberately not run by this file anymore.
-  # VITE_API_BASE_URL is http://localhost:8000, not http://backend:8000
-  # — this gets baked into the JS bundle at build time and is called
-  # from the user's browser, which is outside the Docker network.
   frontend:
     build:
       context: ./frontend-react
       dockerfile: Dockerfile
       args:
         - VITE_API_BASE_URL=http://localhost:8000
+        - VITE_FIREBASE_API_KEY=${VITE_FIREBASE_API_KEY:-}
+        - VITE_FIREBASE_AUTH_DOMAIN=${VITE_FIREBASE_AUTH_DOMAIN:-}
+        - VITE_FIREBASE_PROJECT_ID=${VITE_FIREBASE_PROJECT_ID:-}
+        - VITE_FIREBASE_STORAGE_BUCKET=${VITE_FIREBASE_STORAGE_BUCKET:-}
+        - VITE_FIREBASE_MESSAGING_SENDER_ID=${VITE_FIREBASE_MESSAGING_SENDER_ID:-}
+        - VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID:-}
     ports:
       - "3000:3000"
     depends_on:
@@ -49,10 +74,6 @@ services:
       retries: 5
       start_period: 10s
 
-  # Optional. The backend works without this — /api/ask falls back to
-  # retrieval-only if it's not running or the model hasn't been pulled
-  # yet. Start it, then run the one-time pull command in the README
-  # before expecting generated answers.
   ollama:
     image: ollama/ollama
     ports:
@@ -63,4 +84,5 @@ services:
 
 volumes:
   sevasetu_data:
+  pg_data:
   ollama_models:

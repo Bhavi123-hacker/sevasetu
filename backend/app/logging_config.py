@@ -15,20 +15,40 @@ JSON output, one line per event, so it's immediately usable by any log
 aggregator (CloudWatch, Datadog, Grafana Loki, or just `jq` on a raw
 file) without a custom parser.
 """
+import re
 import json
 import logging
 import sys
 import time
 from datetime import datetime, timezone
 
+AADHAAR_PATTERN = re.compile(r"\b\d{4}\s\d{4}\s\d{4}\b")
+JWT_PATTERN = re.compile(r"eyJ[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+\.[a-zA-Z0-9_\-]+")
+API_KEY_PATTERN = re.compile(r"(re_[a-zA-Z0-9_\-]+|AIza[0-9A-Za-z-_]{35})")
+
+
+def sanitize_log_val(val):
+    if isinstance(val, str):
+        val = AADHAAR_PATTERN.sub("[REDACTED_AADHAAR]", val)
+        val = JWT_PATTERN.sub("[REDACTED_JWT]", val)
+        val = API_KEY_PATTERN.sub("[REDACTED_KEY]", val)
+        return val
+    elif isinstance(val, dict):
+        return {k: ("[REDACTED]" if any(s in k.lower() for s in ["password", "secret", "token", "auth", "credential", "api_key"]) else sanitize_log_val(v)) for k, v in val.items()}
+    elif isinstance(val, list):
+        return [sanitize_log_val(item) for item in val]
+    return val
+
 
 class JSONFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
+        raw_msg = record.getMessage()
+        clean_msg = sanitize_log_val(raw_msg)
         payload = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": clean_msg,
         }
         # Anything passed via logger.info("msg", extra={"foo": "bar"})
         # ends up as attributes on the record — pull out the ones that
@@ -36,7 +56,10 @@ class JSONFormatter(logging.Formatter):
         standard_fields = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys())
         for key, value in record.__dict__.items():
             if key not in standard_fields and key != "message":
-                payload[key] = value
+                if any(s in key.lower() for s in ["password", "secret", "token", "auth"]):
+                    payload[key] = "[REDACTED]"
+                else:
+                    payload[key] = sanitize_log_val(value)
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
         return json.dumps(payload)

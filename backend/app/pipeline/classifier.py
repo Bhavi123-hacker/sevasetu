@@ -1,4 +1,4 @@
-﻿"""
+"""
 Document Type Verification & Classification Engine.
 
 Analyzes raw OCR text to independently classify the uploaded document type,
@@ -30,6 +30,11 @@ DOCUMENT_RULES = {
             ("female", 5, "Gender field"),
             ("help@uidai", 15, "UIDAI support contact"),
         ],
+        "negative_signatures": [
+            (r"birth certificate|certificate of birth|registration of births", 35, "Opposing Birth Certificate header"),
+            (r"electricity bill\b|electric bill|discom|consumer ca no", 35, "Opposing Electricity Bill header"),
+            (r"ration card|public distribution system", 35, "Opposing Ration Card header"),
+        ],
     },
     "ration_card": {
         "label": "Ration Card",
@@ -47,6 +52,10 @@ DOCUMENT_RULES = {
             ("monthly quota", 15, "Food grain quota details"),
             ("gas connection", 10, "LPG connection status"),
             ("consumer", 5, "Consumer detail"),
+        ],
+        "negative_signatures": [
+            (r"government of india.*aadhaar|unique identification authority", 35, "Opposing Aadhaar header"),
+            (r"birth certificate|certificate of birth", 35, "Opposing Birth Certificate header"),
         ],
     },
     "electricity_bill": {
@@ -66,6 +75,10 @@ DOCUMENT_RULES = {
             ("sub-division", 10, "Discom sub-division office"),
             ("amount payable", 10, "Total amount payable"),
         ],
+        "negative_signatures": [
+            (r"government of india.*aadhaar|unique identification authority", 35, "Opposing Aadhaar header"),
+            (r"birth certificate|certificate of birth", 35, "Opposing Birth Certificate header"),
+        ],
     },
     "birth_certificate": {
         "label": "Birth Certificate",
@@ -84,6 +97,10 @@ DOCUMENT_RULES = {
             ("registration no", 15, "Birth registration serial number"),
             ("municipal corporation", 15, "Municipal vital statistics department"),
         ],
+        "negative_signatures": [
+            (r"electricity bill\b|electric bill|consumer ca no", 35, "Opposing Electricity Bill header"),
+            (r"ration card|public distribution system", 35, "Opposing Ration Card header"),
+        ],
     },
     "residence_proof": {
         "label": "Residence Proof / Domicile Certificate",
@@ -101,6 +118,7 @@ DOCUMENT_RULES = {
             ("state of", 10, "State jurisdiction"),
             ("address", 10, "Residential address record"),
         ],
+        "negative_signatures": [],
     },
     "caste_proof": {
         "label": "Caste / Community Certificate",
@@ -116,6 +134,7 @@ DOCUMENT_RULES = {
             ("revenue officer", 15, "Issuing Revenue Officer authority"),
             ("ordinarily resides", 10, "Residential nexus clause"),
         ],
+        "negative_signatures": [],
     },
     "income_proof": {
         "label": "Income Proof / Certificate",
@@ -133,6 +152,7 @@ DOCUMENT_RULES = {
             ("deductions", 10, "Tax and statutory deductions"),
             ("rupees", 10, "Monetary amount denomination"),
         ],
+        "negative_signatures": [],
     },
     "age_proof": {
         "label": "Age Proof (10th / School Record)",
@@ -148,6 +168,7 @@ DOCUMENT_RULES = {
             ("school name", 10, "Educational institution"),
             ("passed", 10, "Examination passing record"),
         ],
+        "negative_signatures": [],
     },
     "disability_certificate": {
         "label": "Disability Certificate",
@@ -164,6 +185,7 @@ DOCUMENT_RULES = {
             ("permanent disability", 15, "Permanence specification"),
             ("chief medical officer|\bcmo\b", 15, "Chief Medical Officer signature"),
         ],
+        "negative_signatures": [],
     },
     "id_proof": {
         "label": "Photo ID Proof (Voter ID / PAN)",
@@ -179,6 +201,7 @@ DOCUMENT_RULES = {
             ("epic no", 20, "Voter EPIC number"),
             ("permanent account number", 20, "PAN number"),
         ],
+        "negative_signatures": [],
     },
 }
 
@@ -206,11 +229,14 @@ class ClassificationResult:
     status: str  # MATCH | LIKELY_MATCH | UNCERTAIN | MISMATCH
     evidence: List[str] = field(default_factory=list)
     is_valid_for_slot: bool = True
+    authenticity_disclaimer: str = "Automated pre-verification only. Official authenticity has not been independently verified."
+    is_authentic_verified: bool = False
 
 
 def classify_document_type(raw_text: str, expected_type: str) -> ClassificationResult:
     """
     Independently verifies the document type against the expected slot type.
+    Uses positive evidence signatures, negative counter-signatures, and structural cues.
     """
     clean_text = raw_text.strip().lower()
     if not clean_text:
@@ -240,6 +266,11 @@ def classify_document_type(raw_text: str, expected_type: str) -> ClassificationR
             if keyword in clean_text:
                 doc_score += weight
                 doc_evidence.append(desc)
+
+        # Apply negative counter-signatures
+        for pattern, neg_weight, desc in rule.get("negative_signatures", []):
+            if re.search(pattern, clean_text, re.IGNORECASE):
+                doc_score = max(0, doc_score - neg_weight)
 
         scores[doc_type] = (doc_score, doc_evidence)
 

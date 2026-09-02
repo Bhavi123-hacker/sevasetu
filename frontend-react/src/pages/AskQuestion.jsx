@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import client from '../api/client'
+import { Icon } from '../components/Icon'
 
 const FREQUENT_QUESTIONS = [
   'What documents do I need for income certificate?',
@@ -27,7 +28,7 @@ export default function AskQuestion() {
       setResult(response.data)
       if (customQ) setQuestion(customQ)
     } catch (err) {
-      setError('Could not reach SevaSetu\u2019s backend.')
+      setError(err.response?.data?.detail || 'Could not process question with policy assistant.')
     } finally {
       setLoading(false)
     }
@@ -87,16 +88,17 @@ export default function AskQuestion() {
       </form>
 
       {error && (
-        <div className="status-banner danger">
-          <span>⚠️</span>
+        <div className="status-banner danger flex items-center gap-2">
+          <Icon name="alert-circle" size={16} className="text-red-600 shrink-0" />
           <div>{error}</div>
         </div>
       )}
 
       {result && (
-        <div>
+        <div className="space-y-4">
           {result.generated_answer ? (
-            <div className="status-banner success" style={{ marginBottom: 16 }}>
+            <div className="status-banner success mb-4 flex items-start gap-2">
+              <Icon name="check-circle" size={16} className="text-emerald-600 shrink-0 mt-0.5" />
               <div>
                 <strong>Answer</strong>
                 <p style={{ margin: '6px 0 0', lineHeight: 1.6 }}>{result.generated_answer}</p>
@@ -131,13 +133,21 @@ export default function AskQuestion() {
           ))}
 
           {result.matches[0]?.relevance < 0.1 && (
-            <div className="status-banner warning">
-              <span>⚠️</span>
+            <div className="status-banner warning flex items-center gap-2">
+              <Icon name="alert-triangle" size={16} className="text-amber-600 shrink-0" />
               <div>
                 None of the regulation passages matched this well — try rephrasing, or this may not be covered yet.
               </div>
             </div>
           )}
+
+          {/* Explicit Legal Disclaimer */}
+          <div className="p-3 bg-[var(--color-surface-hover)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-ink-muted)] flex items-start gap-2">
+            <Icon name="shield" size={16} className="text-teal-600 shrink-0 mt-0.5" />
+            <div>
+              <strong>Civic Advisory:</strong> Information provided is for citizen guidance only, grounded in indexed gazette notifications. Statutory decisions and official issuances remain under the exclusive authority of the Competent Revenue Officer.
+            </div>
+          </div>
         </div>
       )}
     </div>

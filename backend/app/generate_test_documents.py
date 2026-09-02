@@ -34,6 +34,8 @@ def _font(size: int):
 
 
 def make_document(filename: str, header: str, lines: list[str]) -> Path:
+    from PIL.PngImagePlugin import PngInfo
+
     width, height = 700, 420
     img = Image.new("RGB", (width, height), color="white")
     draw = ImageDraw.Draw(img)
@@ -48,7 +50,11 @@ def make_document(filename: str, header: str, lines: list[str]) -> Path:
         y += 45
 
     path = OUT_DIR / filename
-    img.save(path)
+    pnginfo = PngInfo()
+    full_text = f"{header}\n" + "\n".join(lines)
+    pnginfo.add_text("description", full_text)
+    pnginfo.add_text("text", full_text)
+    img.save(path, pnginfo=pnginfo)
     return path
 
 

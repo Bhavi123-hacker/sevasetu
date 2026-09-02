@@ -2,11 +2,15 @@ import { useState, useEffect } from 'react'
 import client from '../api/client'
 import { API_BASE_URL } from '../api/client'
 import { DEFAULT_SERVICE_CATALOG, DOCUMENT_TYPE_LABELS, SERVICE_TYPES } from '../config'
+import { useAuth } from '../context/AuthContext'
+import CitizenAuthModal from '../components/CitizenAuthModal'
 
 const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.pdf']
 const MAX_SIZE_MB = 10
 
 export default function CitizenUpload() {
+  const { citizenUser, logoutCitizen } = useAuth()
+  const [showAuthModal, setShowAuthModal] = useState(false)
   const [services, setServices] = useState(DEFAULT_SERVICE_CATALOG)
   const [selectedServiceId, setSelectedServiceId] = useState('income_certificate')
   const [searchQuery, setSearchQuery] = useState('')
@@ -36,7 +40,7 @@ export default function CitizenUpload() {
 
   const categories = ['All', ...new Set(services.map((s) => s.category || 'General'))]
 
-  const filteredServices = services.filter((s) => {
+  const filteredServices = (Array.isArray(services) ? services : []).filter((s) => {
     const matchesCat = selectedCategory === 'All' || s.category === selectedCategory
     const matchesSearch =
       !searchQuery.trim() ||
@@ -109,6 +113,15 @@ export default function CitizenUpload() {
       if (file) formData.append(docType, file)
     }
 
+    // Check authentication token before sending
+    const citizenToken = localStorage.getItem('sevasetu_citizen_token')
+    const staffToken = localStorage.getItem('sevasetu_staff_token')
+    if (!citizenToken && !staffToken) {
+      setError('Citizen authentication required. Please sign in or create an account before submitting.')
+      setShowAuthModal(true)
+      return
+    }
+
     setLoading(true)
     try {
       const response = await client.post('/api/applications', formData, {
@@ -117,16 +130,22 @@ export default function CitizenUpload() {
       setResult(response.data)
     } catch (err) {
       if (err.response) {
-        // Backend returned a structured HTTP response (400, 413, 422, 500)
-        const detail = err.response.data?.detail
-        if (typeof detail === 'string') {
-          setError(detail)
-        } else if (Array.isArray(detail)) {
-          setError(detail.map((d) => d.msg || JSON.stringify(d)).join(', '))
-        } else if (err.response.status === 413) {
-          setError('Uploaded document exceeds maximum allowed size (10 MB).')
+        if (err.response.status === 401) {
+          logoutCitizen()
+          setError('Citizen authentication required or session expired. Please sign in below.')
+          setShowAuthModal(true)
         } else {
-          setError(`Server error (${err.response.status}): Failed to process application.`)
+          // Backend returned a structured HTTP response (400, 413, 422, 500)
+          const detail = err.response.data?.detail
+          if (typeof detail === 'string') {
+            setError(detail)
+          } else if (Array.isArray(detail)) {
+            setError(detail.map((d) => d.msg || JSON.stringify(d)).join(', '))
+          } else if (err.response.status === 413) {
+            setError('Uploaded document exceeds maximum allowed size (10 MB).')
+          } else {
+            setError(`Server error (${err.response.status}): Failed to process application.`)
+          }
         }
       } else if (err.request) {
         // Network connection error / server unreachable
@@ -228,6 +247,7 @@ export default function CitizenUpload() {
             {filteredServices.map((srv) => {
               const isSelected = srv.id === selectedServiceId
               const docCount = srv.required_documents?.length || 0
+              const isOfficial = srv.verification_status === 'OFFICIAL_VERIFIED'
               return (
                 <div
                   key={srv.id}
@@ -242,11 +262,15 @@ export default function CitizenUpload() {
                     position: 'relative',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-ink-muted)' }}>
                       {srv.category || 'Service'}
                     </span>
-                    {isSelected && <span className="badge badge-success">Selected ✓</span>}
+                    {isOfficial ? (
+                      <span className="badge badge-success" style={{ fontSize: 10 }}>Official Source ✓</span>
+                    ) : (
+                      <span className="badge badge-warning" style={{ fontSize: 10 }}>Configured Template</span>
+                    )}
                   </div>
                   <h4 style={{ margin: '6px 0 4px', fontSize: 15, color: isSelected ? 'var(--color-primary)' : 'var(--color-ink)' }}>
                     {srv.name}
@@ -254,8 +278,9 @@ export default function CitizenUpload() {
                   <p style={{ fontSize: 12, color: 'var(--color-ink-muted)', margin: '0 0 10px', lineHeight: 1.4 }}>
                     {srv.description}
                   </p>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-primary)' }}>
-                    📄 {docCount} required document{docCount !== 1 ? 's' : ''}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, fontWeight: 600 }}>
+                    <span style={{ color: 'var(--color-primary)' }}>📄 {docCount} required document{docCount !== 1 ? 's' : ''}</span>
+                    {isSelected && <span style={{ color: 'var(--color-success-solid)' }}>Selected ✓</span>}
                   </div>
                 </div>
               )
@@ -266,6 +291,40 @@ export default function CitizenUpload() {
               </div>
             )}
           </div>
+
+          {/* Official Authority & Provenance Transparency Panel */}
+          {currentService && (
+            <div style={{ marginTop: 18, padding: 14, background: 'var(--color-surface-muted, #f8fafc)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', fontSize: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                <div style={{ fontWeight: 700, color: 'var(--color-ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  🏛️ <span>GOVERNMENT AUTHORITY & PROVENANCE METADATA</span>
+                </div>
+                {currentService.verification_status === 'OFFICIAL_VERIFIED' ? (
+                  <span className="badge badge-success">✓ Officially Verified Requirement</span>
+                ) : (
+                  <span className="badge badge-warning">⚙ Configured Requirement — Verify with Local Authority</span>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8, color: 'var(--color-ink-muted)' }}>
+                <div><strong>Jurisdiction:</strong> {currentService.jurisdiction || 'State / District Configurable'}</div>
+                <div><strong>Issuing Dept:</strong> {currentService.department || 'Revenue & District Administration'}</div>
+                <div><strong>Rule Version:</strong> {currentService.requirement_version || 'v1.0-2026'}</div>
+                <div>
+                  <strong>Official Source:</strong>{' '}
+                  {currentService.source_url ? (
+                    <a href={currentService.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--color-primary)', textDecoration: 'underline' }}>
+                      {currentService.source_name || 'Official Portal'}
+                    </a>
+                  ) : (
+                    currentService.source_name || 'Configured Template'
+                  )}
+                </div>
+              </div>
+              <div style={{ marginTop: 8, fontSize: 11, color: 'var(--color-ink-light)', fontStyle: 'italic' }}>
+                Disclaimer: Requirements are configured based on statutory guidelines. The designated revenue officer may request additional supporting evidence during formal review.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Step 2: Citizen Details */}
@@ -339,6 +398,11 @@ export default function CitizenUpload() {
                   </label>
                   {file && <span className="badge badge-success">Attached ✓</span>}
                 </div>
+                {doc.allowed_alternatives && doc.allowed_alternatives.length > 1 && (
+                  <div style={{ fontSize: 12, color: 'var(--color-ink-muted)', margin: '2px 0 4px' }}>
+                    💡 <em>Acceptable documents: {doc.allowed_alternatives.map((a) => DOCUMENT_TYPE_LABELS[a] || a.replace('_', ' ')).join(' • ')}</em>
+                  </div>
+                )}
 
                 <div style={{ marginTop: 6 }}>
                   <input
@@ -401,6 +465,21 @@ export default function CitizenUpload() {
           {loading ? 'Processing OCR & Checking Application Consistency\u2026' : `Check My ${currentService.name} Application`}
         </button>
       </form>
+
+      {showAuthModal && (
+        <CitizenAuthModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={(profile) => {
+            setShowAuthModal(false)
+            setError(null)
+            if (profile?.citizen_name) {
+              setCitizenName(profile.citizen_name)
+            }
+          }}
+          initialName={citizenName}
+        />
+      )}
     </div>
   )
 }
@@ -442,6 +521,9 @@ function ReadinessResult({ result, onStartNew }) {
               <span className={`badge badge-${bannerClass}`} style={{ fontSize: 14, padding: '4px 12px' }}>
                 {statusLabel}
               </span>
+              <span className={`badge ${result.risk_level === 'HIGH' ? 'badge-danger' : result.risk_level === 'MEDIUM' ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: 13 }}>
+                Review Attention: {result.risk_level || 'LOW'}
+              </span>
               <span className="badge badge-neutral" style={{ fontSize: 12 }}>
                 OCR Confidence: {result.average_ocr_confidence}%
               </span>
@@ -455,18 +537,22 @@ function ReadinessResult({ result, onStartNew }) {
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
           <div className="metric-grid">
             <div className="metric-card">
-              <div className="metric-label">Estimated Delay</div>
-              <div className="metric-value">{result.estimated_delay_days} days</div>
+              <div className="metric-label">Estimated Turnaround</div>
+              <div className="metric-value">
+                {typeof result.estimated_delay_days === 'string' && result.estimated_delay_days.includes('day')
+                  ? result.estimated_delay_days
+                  : `${result.estimated_delay_days || 3} days`}
+              </div>
             </div>
             <div className="metric-card">
-              <div className="metric-label">Application ID</div>
+              <div className="metric-label">Application Reference ID</div>
               <div className="metric-value" style={{ fontFamily: 'var(--font-mono)', fontSize: 20 }}>
                 {result.application_id}
               </div>
             </div>
             <div className="metric-card">
-              <div className="metric-label">Status</div>
-              <div className="metric-value" style={{ fontSize: 18 }}>Pre-Verified</div>
+              <div className="metric-label">Processing State</div>
+              <div className="metric-value" style={{ fontSize: 18 }}>{result.status || 'SUBMITTED'}</div>
             </div>
           </div>
         </div>
@@ -478,6 +564,39 @@ function ReadinessResult({ result, onStartNew }) {
           </div>
         </div>
       </div>
+
+      {/* Document Type Classification Result Preview */}
+      {result.document_verifications && result.document_verifications.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <h3 style={{ margin: 0 }}>Document Verification Summary</h3>
+            <span className="badge badge-neutral">Slot Fulfillment</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+            {result.document_verifications.map((v, i) => (
+              <div
+                key={i}
+                style={{
+                  background: v.status === 'MISMATCH' ? 'rgba(239, 68, 68, 0.08)' : 'var(--color-surface-hover)',
+                  border: v.status === 'MISMATCH' ? '1px solid var(--color-danger-solid)' : '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius)',
+                  padding: '10px 12px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <strong style={{ fontSize: 13 }}>{DOCUMENT_TYPE_LABELS[v.expected_type] || v.expected_type}</strong>
+                  <span className={`badge ${v.status === 'MATCH' || v.status === 'LIKELY_MATCH' ? 'badge-success' : v.status === 'MISMATCH' ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: 11 }}>
+                    {v.status}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--color-ink-muted)' }}>
+                  Detected: <strong>{DOCUMENT_TYPE_LABELS[v.detected_type] || v.detected_type}</strong>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {result.duplicate_suspected && (
         <div className="status-banner warning">
@@ -584,7 +703,13 @@ function ReadinessResult({ result, onStartNew }) {
           href={`${API_BASE_URL}/api/applications/${result.application_id}/report.pdf`}
           download
         >
-          📄 Download report (PDF)
+          📄 Download Official PDF Report
+        </a>
+        <a
+          className="btn btn-secondary"
+          href="/status"
+        >
+          🔍 Track Application Live Status
         </a>
         <button className="btn btn-secondary" onClick={onStartNew}>
           Start a new application

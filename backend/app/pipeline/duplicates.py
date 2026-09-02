@@ -18,11 +18,14 @@ NAME_WEIGHT = 0.6
 DOB_MATCH_BONUS = 40  # out of the same 0-100 confidence scale
 
 
-def _confidence(name_score: float, dob_matches: bool) -> int:
-    score = name_score * NAME_WEIGHT
-    if dob_matches:
-        score += DOB_MATCH_BONUS
-    return round(min(score, 100))
+def _confidence(name_score: float, date_of_birth: str = None, existing_dob: str = None) -> int:
+    if date_of_birth and existing_dob:
+        if date_of_birth == existing_dob:
+            return 100
+        else:
+            return round(name_score * 0.4)
+    # If DOB is not available on one or both records, base confidence on name similarity
+    return round(name_score)
 
 
 def find_probable_duplicate(
@@ -43,12 +46,11 @@ def find_probable_duplicate(
 
         name_score = fuzz.token_sort_ratio(citizen_name.lower(), application["citizen_name"].lower())
         if name_score < NAME_MATCH_THRESHOLD:
-            continue  # name has to clear its own bar regardless of DOB — DOB alone never triggers a match
+            continue  # name has to clear its own bar regardless of DOB
 
         existing_dob = application.get("date_of_birth")
-        dob_matches = bool(date_of_birth and existing_dob and date_of_birth == existing_dob)
+        confidence = _confidence(name_score, date_of_birth, existing_dob)
 
-        confidence = _confidence(name_score, dob_matches)
         if confidence > best_confidence:
             best_confidence = confidence
             best_match = application
