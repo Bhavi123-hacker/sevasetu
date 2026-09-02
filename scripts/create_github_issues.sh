@@ -129,8 +129,8 @@ create_issue "US-24: Clean-vs-flagged workload count" \
   "could-have" "officer"
 
 create_issue "US-25: Configurable required-documents checklist" \
-  "As an officer or admin, I want to update which documents are required for a given service type, so that the missing-document checklist stays accurate when rules change." \
-  "wont-have" "officer"
+  "As an Administrator, I want to update which documents are required for a given service type, so that the missing-document checklist stays accurate when rules change." \
+  "must-have" "administrator"
 
 create_issue "US-26: Ask a regulation question" \
   "As a citizen, I want to ask a question about the application process in plain language, so that I don't have to dig through official regulations myself." \
@@ -164,6 +164,14 @@ create_issue "US-33: Read raw feedback comments" \
   "As an officer, I want to read recent feedback comments directly, so that I understand issues in citizens' own words, not just as a sentiment score." \
   "could-have" "officer"
 
-echo "Done. Created 33 issues in $REPO."
-echo "That's 8 more than the assignment's 25 — see docs/user_stories_moscow.md for which six to drop if you need exactly 25."
+create_issue "US-34: Distinct Administrator login" \
+  "As an Administrator, I want to log in as a distinct role from Officer, so that the actions I can take (editing rules) are separated from the actions an Officer takes (resolving applications)." \
+  "must-have" "administrator"
+
+create_issue "US-35: Generated plain-language answer" \
+  "As a citizen, I want a plain-language generated answer to my question when one is available, so that I don't have to parse a formal regulation passage myself." \
+  "could-have" "citizen"
+
+echo "Done. Created 35 issues in $REPO."
+echo "That's 10 more than the assignment's 25 — see docs/user_stories_moscow.md for which ones to drop if you need exactly 25."
 echo "Add them to a GitHub Project board from the Issues tab -> Projects."

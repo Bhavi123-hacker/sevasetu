@@ -1,46 +1,66 @@
-import os
-
 import requests
 import streamlit as st
 
-from config import API_BASE_URL, SERVICE_TYPES
+from config import API_BASE_URL, SERVICE_TYPES, auth_headers
 
 st.set_page_config(page_title="SevaSetu — Officer Queue", page_icon="🗂️", layout="wide")
 
 # --- Access gate ---
-# NOTE: this is a demo-level gate, not real authentication. There's no
-# password hashing, no session tokens, no rate limiting on attempts.
-# Swap this for a real login endpoint (backend-issued session/JWT)
-# before this ever handles real citizen data.
-OFFICER_PASSWORD = os.getenv("OFFICER_DEMO_PASSWORD", "seva123")
-
+# Real JWT now: login calls the backend, which returns a signed token.
+# Every protected call below sends it as a Bearer header — the backend
+# verifies it independently, this page can't just claim a role anymore.
 if "officer_logged_in" not in st.session_state:
     st.session_state.officer_logged_in = False
     st.session_state.officer_name = None
+    st.session_state.staff_role = None
+    st.session_state.staff_token = None
 
 if not st.session_state.officer_logged_in:
-    st.title("Officer Login")
-    st.caption("Demo access gate — not production authentication.")
+    st.title("Staff Login")
+    st.caption("Real JWT auth — one shared demo password per role, not per-user accounts yet.")
     officer_name = st.text_input("Your name")
+    role = st.radio("Role", ["Officer", "Administrator"], horizontal=True)
     password = st.text_input("Password", type="password")
     if st.button("Log in", type="primary"):
         if not officer_name.strip():
             st.error("Enter your name — it's used to attribute resolved applications.")
-        elif password == OFFICER_PASSWORD:
-            st.session_state.officer_logged_in = True
-            st.session_state.officer_name = officer_name.strip()
-            st.rerun()
         else:
-            st.error("Incorrect password.")
+            try:
+                r = requests.post(
+                    f"{API_BASE_URL}/api/auth/login",
+                    json={"name": officer_name.strip(), "role": role, "password": password},
+                    timeout=15,
+                )
+                if r.status_code == 401:
+                    st.error("Incorrect password.")
+                else:
+                    r.raise_for_status()
+                    data = r.json()
+                    st.session_state.officer_logged_in = True
+                    st.session_state.officer_name = data["name"]
+                    st.session_state.staff_role = data["role"]
+                    st.session_state.staff_token = data["access_token"]
+                    st.rerun()
+            except requests.RequestException as e:
+                st.error(f"Couldn't reach SevaSetu's backend: {e}")
     st.stop()
+
+if st.session_state.staff_role == "Administrator":
+    st.info("Logged in as **Administrator**. Officer-specific actions (resolving applications) are hidden — that's an Officer task. Go to **Admin Settings** in the sidebar to edit the required-documents checklist.")
 
 # --- Queue ---
 
 st.title("Officer Queue")
-st.caption(f"Logged in as {st.session_state.officer_name}")
+st.caption(f"Logged in as {st.session_state.officer_name} ({st.session_state.staff_role})")
 
 try:
-    applications = requests.get(f"{API_BASE_URL}/api/applications", timeout=15).json()
+    r = requests.get(f"{API_BASE_URL}/api/applications", headers=auth_headers(), timeout=15)
+    if r.status_code == 401:
+        st.session_state.officer_logged_in = False
+        st.warning("Session expired — log in again.")
+        st.rerun()
+    r.raise_for_status()
+    applications = r.json()
 except requests.RequestException as e:
     st.error(f"Couldn't reach SevaSetu's backend: {e}")
     st.stop()
@@ -92,6 +112,7 @@ for application in filtered:
     )
 
     with st.expander(header):
+        # Status-check endpoint stays public (citizens use it too), so no auth header needed here.
         detail = requests.get(f"{API_BASE_URL}/api/applications/{application['id']}", timeout=15).json()
 
         st.write(f"**Application ID:** {detail['id']}  |  **Status:** {detail['status']}")
@@ -110,12 +131,16 @@ for application in filtered:
         st.write(f"**Recommendation shown to citizen:** {detail['recommendation']}")
 
         if detail["status"] != "resolved":
-            if st.button("Mark as reviewed / resolved", key=f"resolve_{detail['id']}"):
-                requests.post(
-                    f"{API_BASE_URL}/api/applications/{detail['id']}/resolve",
-                    json={"officer_name": st.session_state.officer_name},
-                    timeout=15,
-                )
-                st.rerun()
+            if st.session_state.staff_role == "Officer":
+                if st.button("Mark as reviewed / resolved", key=f"resolve_{detail['id']}"):
+                    r = requests.post(
+                        f"{API_BASE_URL}/api/applications/{detail['id']}/resolve",
+                        headers=auth_headers(),
+                        timeout=15,
+                    )
+                    if r.status_code == 403:
+                        st.error("Server rejected this — your token doesn't have Officer rights for this action.")
+                    else:
+                        st.rerun()
         else:
             st.caption(f"Resolved{' by ' + detail['resolved_by'] if detail.get('resolved_by') else ''}")

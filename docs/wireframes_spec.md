@@ -53,7 +53,7 @@ This is a build spec for Figma, not a substitute for it — Figma files can't be
 
 ## 6. Required-documents settings (Settings screen)
 
-**Who:** Officer/admin. **Maps to user stories:** US-25 (Won't-have this iteration — wireframe it anyway; it documents the intended shape even though it isn't built yet).
+**Who:** Administrator. **Maps to user stories:** US-25, US-34. **Built** — `frontend/pages/5_Admin_Settings.py`, gated separately from Officer Queue by role.
 
 - List of service types, each expandable to show its required-document checklist
 - "Add document requirement" control per service type

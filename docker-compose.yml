@@ -1,4 +1,21 @@
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=sevasetu
+      - POSTGRES_PASSWORD=sevasetu_secure_pass
+      - POSTGRES_DB=sevasetu
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sevasetu -d sevasetu"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -7,22 +24,65 @@ services:
       - "8000:8000"
     volumes:
       - sevasetu_data:/app/data
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro
     environment:
       - DATABASE_URL=sqlite:///./data/sevasetu.db
+      - POSTGRES_DATABASE_URL=postgresql://sevasetu:sevasetu_secure_pass@postgres:5432/sevasetu
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2:1b
+      - JWT_SECRET_KEY=dev-only-secret-change-before-any-real-deployment
+      - OFFICER_DEMO_PASSWORD=seva123
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-}
+      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL:-}
+      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY:-}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL:-SevaSetu <onboarding@resend.dev>}
+      - AUTH_MODE=${AUTH_MODE:-development}
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   frontend:
     build:
-      context: ./frontend
+      context: ./frontend-react
       dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://localhost:8000
+        - VITE_FIREBASE_API_KEY=${VITE_FIREBASE_API_KEY:-}
+        - VITE_FIREBASE_AUTH_DOMAIN=${VITE_FIREBASE_AUTH_DOMAIN:-}
+        - VITE_FIREBASE_PROJECT_ID=${VITE_FIREBASE_PROJECT_ID:-}
+        - VITE_FIREBASE_STORAGE_BUCKET=${VITE_FIREBASE_STORAGE_BUCKET:-}
+        - VITE_FIREBASE_MESSAGING_SENDER_ID=${VITE_FIREBASE_MESSAGING_SENDER_ID:-}
+        - VITE_FIREBASE_APP_ID=${VITE_FIREBASE_APP_ID:-}
     ports:
-      - "8501:8501"
-    environment:
-      - API_BASE_URL=http://backend:8000
-      - OFFICER_DEMO_PASSWORD=seva123
+      - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
     restart: unless-stopped
 
 volumes:
   sevasetu_data:
+  pg_data:
+  ollama_models:

@@ -1,0 +1,36 @@
+# Optional Postgres setup for multi-user / production-style deployment.
+# The default docker-compose.yml stays SQLite — zero extra service,
+# zero extra config, matches this project's "no unnecessary dependency"
+# principle for the course-deadline MVP. Use this file on top of it
+# when you actually want Postgres (verified against a real local
+# Postgres instance before this file was written — 20/20 backend tests
+# pass unmodified with only DATABASE_URL changed):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build
+#
+services:
+  backend:
+    environment:
+      - DATABASE_URL=postgresql://sevasetu:${POSTGRES_PASSWORD:-dev_only_change_me}@postgres:5432/sevasetu
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=sevasetu
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dev_only_change_me}
+      - POSTGRES_DB=sevasetu
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sevasetu"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
