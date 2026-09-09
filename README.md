@@ -36,6 +36,7 @@ ENGINEERING STATUS:
 ## 📚 Technical Documentation Index
 
 - [🏛️ Product Overview & Capabilities](PRODUCT_OVERVIEW.md)
+- [🎨 Software Design & Architecture (DA2 / Review 2)](design/README.md)
 - [🚀 Deployment & Infrastructure Guide](DEPLOYMENT.md)
 - [🔒 Security & Governance Architecture](SECURITY.md)
 - [⚙️ Operations & Disaster Recovery Guide](OPERATIONS.md)
@@ -44,7 +45,32 @@ ENGINEERING STATUS:
 
 ---
 
-## 2. Core Operating Architecture & Lifecycle
+## 2. Software Design (Review 2 / Digital Assignment 2)
+
+SevaSetu implements a **Layered Multi-Tier Architecture with a Modular Verification Pipeline** combined with a **Sequential Verification Pipeline** and **Service-Oriented Modularity**. This design enforces strict separation of concerns, high functional cohesion, and low coupling between presentation (React 18), API gateway (FastAPI), domain verification services (Python), and transactional storage (PostgreSQL 15 / SQLite). Crucially, the architecture enforces a mandatory human-in-the-loop statutory gate where AI algorithms purely provide pre-verification assistance while legally binding decisions remain exclusively with authorized human revenue officers.
+
+### Architecture Diagrams & Source Assets
+- **Full System Architecture (Editable Draw.io):** [`design/architecture.drawio`](design/architecture.drawio)
+- **Full System Architecture (High-Res PNG):** [`design/architecture.png`](design/architecture.png)
+- **Software Design Guide:** [`design/README.md`](design/README.md)
+- **High-Level System Architecture Diagram:**
+
+![SevaSetu High-Level Architecture](design/architecture.png)
+
+- **Detailed Design Document (PDF Report, 9 Pages):** [`design/SevaSetu_Software_Design_Document.pdf`](design/SevaSetu_Software_Design_Document.pdf)
+- **Detailed Design Document (Word Source):** [`design/SevaSetu_Software_Design_Document.docx`](design/SevaSetu_Software_Design_Document.docx)
+- **Interactive Figma UI Prototype & Workspace:** [SevaSetu Figma Prototype](https://www.figma.com/design/LbHzS4ErAfeXeOLJIQDAN6/sevasetu?node-id=0-1&p=f)
+- **UI Screen Gallery (6 Polished Screens):** [`design/ui/`](design/ui/)
+  - [01 Citizen Home](design/ui/01_citizen_home.png)
+  - [02 Document Upload](design/ui/02_document_upload.png)
+  - [03 Application Status](design/ui/03_application_status.png)
+  - [04 Officer Dashboard](design/ui/04_officer_dashboard.png)
+  - [05 Application Review](design/ui/05_application_review.png)
+  - [06 Grievance Center](design/ui/06_grievance.png)
+
+---
+
+## 3. Core Operating Architecture & Lifecycle
 
 ```
 CITIZEN (Firebase Email Auth / Registration / Profile / Purpose-Bound Consents)
@@ -80,7 +106,7 @@ IMMUTABLE SHA-256 AUDIT CHAIN WITH CRYPTOGRAPHIC INTEGRITY VERIFICATION
 
 ---
 
-## 3. Key Capabilities (v1.1.1)
+## 4. Key Capabilities (v1.1.1)
 
 ### A. AI-Assisted Pre-Verification Pipeline
 - **Deterministic Classifier**: Signature-based classification with strict negative rules preventing cross-document false positives.
@@ -117,7 +143,7 @@ IMMUTABLE SHA-256 AUDIT CHAIN WITH CRYPTOGRAPHIC INTEGRITY VERIFICATION
 
 ---
 
-## 4. Technology Stack
+## 5. Technology Stack
 
 | Layer | Technology | Purpose |
 |---|---|---|
@@ -132,7 +158,7 @@ IMMUTABLE SHA-256 AUDIT CHAIN WITH CRYPTOGRAPHIC INTEGRITY VERIFICATION
 
 ---
 
-## 5. Database Schema Management
+## 6. Database Schema Management
 
 SevaSetu implements automated runtime schema reconciliation for development and local demo deployments:
 - **SQLite Runtime Reconciliation**: Automatically discovers and applies non-destructive `ALTER TABLE ADD COLUMN` migrations using SQLAlchemy metadata introspection on startup.
@@ -142,7 +168,7 @@ SevaSetu implements automated runtime schema reconciliation for development and 
 
 ---
 
-## 6. Local Setup & Verification
+## 7. Local Setup & Verification
 
 ### Running with Docker Compose:
 ```bash
