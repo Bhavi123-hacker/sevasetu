@@ -1,0 +1,1015 @@
+{
+  "_type": "Project",
+  "_id": "SEVASETU-2026-PROJECT-001",
+  "name": "SevaSetu Civic Pre-Verification Platform",
+  "description": "Software Engineering project by Bhavy Garg (24BAI1088) and Swara Reddy (24BAI1109). Vellore Institute of Technology, B.Tech Artificial Intelligence & Applications",
+  "version": "1.1.0",
+  "ownedElements": [
+    {
+      "_type": "UMLModel",
+      "_id": "MODEL-001",
+      "name": "SevaSetu System Model",
+      "ownedElements": [
+        {
+          "_type": "UMLPackage",
+          "_id": "PKG-DOMAIN",
+          "name": "Domain Model (models.py)",
+          "ownedElements": [
+            {
+              "_type": "UMLClass",
+              "_id": "CLS-CITIZEN",
+              "name": "CitizenProfile",
+              "stereotype": "entity",
+              "isAbstract": false,
+              "attributes": [
+                {
+                  "_type": "UMLAttribute",
+                  "name": "id",
+                  "type": "UUID",
+                  "visibility": "private",
+                  "isStatic": false
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "citizen_name",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "email",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "phone_number",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "firebase_uid",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "category",
+                  "type": "str",
+                  "visibility": "private",
+                  "defaultValue": "General"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "annual_income",
+                  "type": "float",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "phone_verification_status",
+                  "type": "str",
+                  "visibility": "private",
+                  "defaultValue": "UNVERIFIED"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "created_at",
+                  "type": "datetime",
+                  "visibility": "private"
+                }
+              ],
+              "operations": [
+                {
+                  "_type": "UMLOperation",
+                  "name": "register",
+                  "visibility": "public",
+                  "parameters": [
+                    {
+                      "name": "data",
+                      "type": "dict"
+                    }
+                  ],
+                  "returnType": "CitizenProfile"
+                },
+                {
+                  "_type": "UMLOperation",
+                  "name": "authenticate",
+                  "visibility": "public",
+                  "parameters": [
+                    {
+                      "name": "token",
+                      "type": "str"
+                    }
+                  ],
+                  "returnType": "bool"
+                },
+                {
+                  "_type": "UMLOperation",
+                  "name": "update_profile",
+                  "visibility": "public",
+                  "returnType": "void"
+                }
+              ]
+            },
+            {
+              "_type": "UMLClass",
+              "_id": "CLS-APPLICATION",
+              "name": "Application",
+              "stereotype": "entity",
+              "attributes": [
+                {
+                  "_type": "UMLAttribute",
+                  "name": "id",
+                  "type": "UUID",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "citizen_id",
+                  "type": "UUID",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "scheme_id",
+                  "type": "UUID",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "status",
+                  "type": "ApplicationStatus",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "readiness_score",
+                  "type": "int",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "sla_deadline",
+                  "type": "datetime",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "service_type",
+                  "type": "str",
+                  "visibility": "private"
+                }
+              ],
+              "operations": [
+                {
+                  "_type": "UMLOperation",
+                  "name": "submit",
+                  "visibility": "public",
+                  "returnType": "void"
+                },
+                {
+                  "_type": "UMLOperation",
+                  "name": "transition_state",
+                  "visibility": "public",
+                  "returnType": "void"
+                },
+                {
+                  "_type": "UMLOperation",
+                  "name": "compute_readiness",
+                  "visibility": "public",
+                  "returnType": "ReadinessResult"
+                }
+              ]
+            },
+            {
+              "_type": "UMLClass",
+              "_id": "CLS-DOCUMENT",
+              "name": "ApplicationDocument",
+              "stereotype": "entity",
+              "attributes": [
+                {
+                  "_type": "UMLAttribute",
+                  "name": "id",
+                  "type": "UUID",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "application_id",
+                  "type": "UUID",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "doc_type",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "ocr_text",
+                  "type": "TEXT",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "integrity_status",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "quality_score",
+                  "type": "float",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "ocr_confidence",
+                  "type": "float",
+                  "visibility": "private"
+                }
+              ],
+              "operations": [
+                {
+                  "_type": "UMLOperation",
+                  "name": "validate_integrity",
+                  "visibility": "public",
+                  "returnType": "DocumentIntegrityResult"
+                },
+                {
+                  "_type": "UMLOperation",
+                  "name": "extract_text",
+                  "visibility": "public",
+                  "returnType": "str"
+                },
+                {
+                  "_type": "UMLOperation",
+                  "name": "classify_type",
+                  "visibility": "public",
+                  "returnType": "ClassificationResult"
+                }
+              ]
+            },
+            {
+              "_type": "UMLClass",
+              "_id": "CLS-AUDIT",
+              "name": "AuditLedger",
+              "stereotype": "entity",
+              "attributes": [
+                {
+                  "_type": "UMLAttribute",
+                  "name": "id",
+                  "type": "UUID",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "application_id",
+                  "type": "UUID",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "event_type",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "prev_hash",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "curr_hash",
+                  "type": "str",
+                  "visibility": "private"
+                }
+              ],
+              "operations": [
+                {
+                  "_type": "UMLOperation",
+                  "name": "append",
+                  "visibility": "public",
+                  "returnType": "void"
+                },
+                {
+                  "_type": "UMLOperation",
+                  "name": "verify_chain",
+                  "visibility": "public",
+                  "returnType": "bool"
+                }
+              ]
+            },
+            {
+              "_type": "UMLClass",
+              "_id": "CLS-GRIEVANCE",
+              "name": "Grievance",
+              "stereotype": "entity",
+              "attributes": [
+                {
+                  "_type": "UMLAttribute",
+                  "name": "id",
+                  "type": "UUID",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "public_reference",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "citizen_id",
+                  "type": "UUID",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "category",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "status",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "priority",
+                  "type": "str",
+                  "visibility": "private"
+                },
+                {
+                  "_type": "UMLAttribute",
+                  "name": "sla_deadline",
+                  "type": "datetime",
+                  "visibility": "private"
+                }
+              ],
+              "operations": [
+                {
+                  "_type": "UMLOperation",
+                  "name": "escalate",
+                  "visibility": "public",
+                  "returnType": "void"
+                },
+                {
+                  "_type": "UMLOperation",
+                  "name": "resolve",
+                  "visibility": "public",
+                  "returnType": "void"
+                }
+              ]
+            }
+          ],
+          "ownedRelationships": [
+            {
+              "_type": "UMLAssociation",
+              "_id": "REL-01",
+              "name": "submits",
+              "end1": {
+                "reference": "CLS-CITIZEN",
+                "multiplicity": "1"
+              },
+              "end2": {
+                "reference": "CLS-APPLICATION",
+                "multiplicity": "0..*"
+              }
+            },
+            {
+              "_type": "UMLAssociation",
+              "_id": "REL-02",
+              "name": "contains",
+              "end1": {
+                "reference": "CLS-APPLICATION",
+                "multiplicity": "1"
+              },
+              "end2": {
+                "reference": "CLS-DOCUMENT",
+                "multiplicity": "1..*"
+              }
+            },
+            {
+              "_type": "UMLAssociation",
+              "_id": "REL-03",
+              "name": "generates",
+              "end1": {
+                "reference": "CLS-APPLICATION",
+                "multiplicity": "1"
+              },
+              "end2": {
+                "reference": "CLS-AUDIT",
+                "multiplicity": "1..*"
+              }
+            },
+            {
+              "_type": "UMLAssociation",
+              "_id": "REL-04",
+              "name": "files",
+              "end1": {
+                "reference": "CLS-CITIZEN",
+                "multiplicity": "1"
+              },
+              "end2": {
+                "reference": "CLS-GRIEVANCE",
+                "multiplicity": "0..*"
+              }
+            }
+          ]
+        },
+        {
+          "_type": "UMLPackage",
+          "_id": "PKG-STATEMACHINE",
+          "name": "State Machine (pipeline/state_machine.py)",
+          "ownedElements": [
+            {
+              "_type": "UMLStateMachine",
+              "_id": "SM-APPLICATION",
+              "name": "ApplicationLifecycle",
+              "ownedElements": [
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-DRAFT",
+                  "name": "DRAFT",
+                  "isInitial": true,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-SUBMITTED",
+                  "name": "SUBMITTED",
+                  "isInitial": false,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-PRE_VERIFICATION",
+                  "name": "PRE_VERIFICATION",
+                  "isInitial": false,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-READY_FOR_REVIEW",
+                  "name": "READY_FOR_REVIEW",
+                  "isInitial": false,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-CORRECTION_REQUESTED",
+                  "name": "CORRECTION_REQUESTED",
+                  "isInitial": false,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-NEEDS_CORRECTION",
+                  "name": "NEEDS_CORRECTION",
+                  "isInitial": false,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-CORRECTION_SUBMITTED",
+                  "name": "CORRECTION_SUBMITTED",
+                  "isInitial": false,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-OFFICER_REVIEW",
+                  "name": "OFFICER_REVIEW",
+                  "isInitial": false,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-INTERVIEW_ELIGIBLE",
+                  "name": "INTERVIEW_ELIGIBLE",
+                  "isInitial": false,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-INTERVIEW_IN_PROGRESS",
+                  "name": "INTERVIEW_IN_PROGRESS",
+                  "isInitial": false,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-INTERVIEW_COMPLETED",
+                  "name": "INTERVIEW_COMPLETED",
+                  "isInitial": false,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-FINAL_REVIEW",
+                  "name": "FINAL_REVIEW",
+                  "isInitial": false,
+                  "isFinal": false
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-APPROVED",
+                  "name": "APPROVED",
+                  "isInitial": false,
+                  "isFinal": true
+                },
+                {
+                  "_type": "UMLState",
+                  "_id": "ST-REJECTED",
+                  "name": "REJECTED",
+                  "isInitial": false,
+                  "isFinal": true
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-DRAFT",
+                  "target": "ST-SUBMITTED",
+                  "name": "DRAFT -> SUBMITTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-DRAFT",
+                  "target": "ST-PRE_VERIFICATION",
+                  "name": "DRAFT -> PRE_VERIFICATION"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-SUBMITTED",
+                  "target": "ST-PRE_VERIFICATION",
+                  "name": "SUBMITTED -> PRE_VERIFICATION"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-SUBMITTED",
+                  "target": "ST-READY_FOR_REVIEW",
+                  "name": "SUBMITTED -> READY_FOR_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-SUBMITTED",
+                  "target": "ST-CORRECTION_REQUESTED",
+                  "name": "SUBMITTED -> CORRECTION_REQUESTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-SUBMITTED",
+                  "target": "ST-NEEDS_CORRECTION",
+                  "name": "SUBMITTED -> NEEDS_CORRECTION"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-PRE_VERIFICATION",
+                  "target": "ST-READY_FOR_REVIEW",
+                  "name": "PRE_VERIFICATION -> READY_FOR_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-PRE_VERIFICATION",
+                  "target": "ST-CORRECTION_REQUESTED",
+                  "name": "PRE_VERIFICATION -> CORRECTION_REQUESTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-PRE_VERIFICATION",
+                  "target": "ST-NEEDS_CORRECTION",
+                  "name": "PRE_VERIFICATION -> NEEDS_CORRECTION"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-PRE_VERIFICATION",
+                  "target": "ST-INTERVIEW_ELIGIBLE",
+                  "name": "PRE_VERIFICATION -> INTERVIEW_ELIGIBLE"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-READY_FOR_REVIEW",
+                  "target": "ST-OFFICER_REVIEW",
+                  "name": "READY_FOR_REVIEW -> OFFICER_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-READY_FOR_REVIEW",
+                  "target": "ST-INTERVIEW_ELIGIBLE",
+                  "name": "READY_FOR_REVIEW -> INTERVIEW_ELIGIBLE"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-READY_FOR_REVIEW",
+                  "target": "ST-CORRECTION_REQUESTED",
+                  "name": "READY_FOR_REVIEW -> CORRECTION_REQUESTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-READY_FOR_REVIEW",
+                  "target": "ST-NEEDS_CORRECTION",
+                  "name": "READY_FOR_REVIEW -> NEEDS_CORRECTION"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-READY_FOR_REVIEW",
+                  "target": "ST-FINAL_REVIEW",
+                  "name": "READY_FOR_REVIEW -> FINAL_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-READY_FOR_REVIEW",
+                  "target": "ST-APPROVED",
+                  "name": "READY_FOR_REVIEW -> APPROVED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-READY_FOR_REVIEW",
+                  "target": "ST-REJECTED",
+                  "name": "READY_FOR_REVIEW -> REJECTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-OFFICER_REVIEW",
+                  "target": "ST-INTERVIEW_ELIGIBLE",
+                  "name": "OFFICER_REVIEW -> INTERVIEW_ELIGIBLE"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-OFFICER_REVIEW",
+                  "target": "ST-CORRECTION_REQUESTED",
+                  "name": "OFFICER_REVIEW -> CORRECTION_REQUESTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-OFFICER_REVIEW",
+                  "target": "ST-NEEDS_CORRECTION",
+                  "name": "OFFICER_REVIEW -> NEEDS_CORRECTION"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-OFFICER_REVIEW",
+                  "target": "ST-FINAL_REVIEW",
+                  "name": "OFFICER_REVIEW -> FINAL_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-OFFICER_REVIEW",
+                  "target": "ST-APPROVED",
+                  "name": "OFFICER_REVIEW -> APPROVED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-OFFICER_REVIEW",
+                  "target": "ST-REJECTED",
+                  "name": "OFFICER_REVIEW -> REJECTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-OFFICER_REVIEW",
+                  "target": "ST-READY_FOR_REVIEW",
+                  "name": "OFFICER_REVIEW -> READY_FOR_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-CORRECTION_REQUESTED",
+                  "target": "ST-CORRECTION_SUBMITTED",
+                  "name": "CORRECTION_REQUESTED -> CORRECTION_SUBMITTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-CORRECTION_REQUESTED",
+                  "target": "ST-READY_FOR_REVIEW",
+                  "name": "CORRECTION_REQUESTED -> READY_FOR_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-NEEDS_CORRECTION",
+                  "target": "ST-CORRECTION_SUBMITTED",
+                  "name": "NEEDS_CORRECTION -> CORRECTION_SUBMITTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-NEEDS_CORRECTION",
+                  "target": "ST-READY_FOR_REVIEW",
+                  "name": "NEEDS_CORRECTION -> READY_FOR_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-CORRECTION_SUBMITTED",
+                  "target": "ST-PRE_VERIFICATION",
+                  "name": "CORRECTION_SUBMITTED -> PRE_VERIFICATION"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-CORRECTION_SUBMITTED",
+                  "target": "ST-READY_FOR_REVIEW",
+                  "name": "CORRECTION_SUBMITTED -> READY_FOR_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-CORRECTION_SUBMITTED",
+                  "target": "ST-OFFICER_REVIEW",
+                  "name": "CORRECTION_SUBMITTED -> OFFICER_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_ELIGIBLE",
+                  "target": "ST-INTERVIEW_IN_PROGRESS",
+                  "name": "INTERVIEW_ELIGIBLE -> INTERVIEW_IN_PROGRESS"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_ELIGIBLE",
+                  "target": "ST-FINAL_REVIEW",
+                  "name": "INTERVIEW_ELIGIBLE -> FINAL_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_ELIGIBLE",
+                  "target": "ST-CORRECTION_REQUESTED",
+                  "name": "INTERVIEW_ELIGIBLE -> CORRECTION_REQUESTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_ELIGIBLE",
+                  "target": "ST-NEEDS_CORRECTION",
+                  "name": "INTERVIEW_ELIGIBLE -> NEEDS_CORRECTION"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_ELIGIBLE",
+                  "target": "ST-APPROVED",
+                  "name": "INTERVIEW_ELIGIBLE -> APPROVED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_ELIGIBLE",
+                  "target": "ST-REJECTED",
+                  "name": "INTERVIEW_ELIGIBLE -> REJECTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_IN_PROGRESS",
+                  "target": "ST-INTERVIEW_COMPLETED",
+                  "name": "INTERVIEW_IN_PROGRESS -> INTERVIEW_COMPLETED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_IN_PROGRESS",
+                  "target": "ST-INTERVIEW_ELIGIBLE",
+                  "name": "INTERVIEW_IN_PROGRESS -> INTERVIEW_ELIGIBLE"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_COMPLETED",
+                  "target": "ST-FINAL_REVIEW",
+                  "name": "INTERVIEW_COMPLETED -> FINAL_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_COMPLETED",
+                  "target": "ST-OFFICER_REVIEW",
+                  "name": "INTERVIEW_COMPLETED -> OFFICER_REVIEW"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_COMPLETED",
+                  "target": "ST-APPROVED",
+                  "name": "INTERVIEW_COMPLETED -> APPROVED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_COMPLETED",
+                  "target": "ST-REJECTED",
+                  "name": "INTERVIEW_COMPLETED -> REJECTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-INTERVIEW_COMPLETED",
+                  "target": "ST-CORRECTION_REQUESTED",
+                  "name": "INTERVIEW_COMPLETED -> CORRECTION_REQUESTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-FINAL_REVIEW",
+                  "target": "ST-APPROVED",
+                  "name": "FINAL_REVIEW -> APPROVED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-FINAL_REVIEW",
+                  "target": "ST-REJECTED",
+                  "name": "FINAL_REVIEW -> REJECTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-FINAL_REVIEW",
+                  "target": "ST-CORRECTION_REQUESTED",
+                  "name": "FINAL_REVIEW -> CORRECTION_REQUESTED"
+                },
+                {
+                  "_type": "UMLTransition",
+                  "source": "ST-FINAL_REVIEW",
+                  "target": "ST-OFFICER_REVIEW",
+                  "name": "FINAL_REVIEW -> OFFICER_REVIEW"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "_type": "UMLPackage",
+          "_id": "PKG-USECASES",
+          "name": "Use Cases",
+          "ownedElements": [
+            {
+              "_type": "UMLActor",
+              "_id": "ACT-CITIZEN",
+              "name": "Citizen Applicant"
+            },
+            {
+              "_type": "UMLActor",
+              "_id": "ACT-OFFICER",
+              "name": "Revenue Officer"
+            },
+            {
+              "_type": "UMLActor",
+              "_id": "ACT-SUPERVISOR",
+              "name": "Civic Supervisor"
+            },
+            {
+              "_type": "UMLActor",
+              "_id": "ACT-AUDITOR",
+              "name": "System Auditor"
+            },
+            {
+              "_type": "UMLActor",
+              "_id": "ACT-FIREBASE",
+              "name": "Firebase Auth «external»"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-01",
+              "name": "Register / Login"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-02",
+              "name": "Submit Application"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-03",
+              "name": "Upload Documents"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-04",
+              "name": "Track Application Status"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-05",
+              "name": "Take AI Interview"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-06",
+              "name": "Download Certificate"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-07",
+              "name": "File Grievance"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-08",
+              "name": "Verify QR Code"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-09",
+              "name": "Officer Login"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-10",
+              "name": "View Case Queue"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-11",
+              "name": "Review Application"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-12",
+              "name": "Approve / Reject"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-13",
+              "name": "Request Correction"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-14",
+              "name": "Monitor SLA Alerts"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-15",
+              "name": "Manage Grievance"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-16",
+              "name": "OCR Pre-Verification"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-17",
+              "name": "Eligibility Check"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-18",
+              "name": "Generate Audit Trail"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-19",
+              "name": "Send Notifications"
+            },
+            {
+              "_type": "UMLUseCase",
+              "_id": "UC-20",
+              "name": "Generate Certificate"
+            }
+          ]
+        },
+        {
+          "_type": "UMLPackage",
+          "_id": "PKG-DEPLOYMENT",
+          "name": "Deployment (docker-compose.yml)",
+          "ownedElements": [
+            {
+              "_type": "UMLNode",
+              "_id": "NODE-HOST",
+              "name": "Docker Host Ubuntu 22.04 LTS"
+            },
+            {
+              "_type": "UMLNode",
+              "_id": "NODE-BACKEND",
+              "name": "sevasetu-backend (Python 3.11, port 8000)"
+            },
+            {
+              "_type": "UMLNode",
+              "_id": "NODE-FRONTEND",
+              "name": "sevasetu-frontend (Node 20, port 3000)"
+            },
+            {
+              "_type": "UMLNode",
+              "_id": "NODE-POSTGRES",
+              "name": "sevasetu-postgres (PostgreSQL 15, port 5432)"
+            },
+            {
+              "_type": "UMLNode",
+              "_id": "NODE-OLLAMA",
+              "name": "sevasetu-ollama (port 11434)"
+            },
+            {
+              "_type": "UMLArtifact",
+              "_id": "ART-FASTAPI",
+              "name": "FastAPI + Uvicorn (uvicorn==0.30.6)"
+            },
+            {
+              "_type": "UMLArtifact",
+              "_id": "ART-REACT",
+              "name": "React 18.3.1 + Vite 5.3.1"
+            },
+            {
+              "_type": "UMLArtifact",
+              "_id": "ART-PG",
+              "name": "PostgreSQL 15-alpine"
+            },
+            {
+              "_type": "UMLArtifact",
+              "_id": "ART-TESSERACT",
+              "name": "Tesseract OCR 5"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

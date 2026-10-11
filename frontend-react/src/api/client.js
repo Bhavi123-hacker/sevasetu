@@ -1,9 +1,19 @@
 import axios from 'axios'
 
 // Vite exposes env vars prefixed VITE_ to the browser bundle.
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+export const getApiBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.location) {
+    const host = window.location.hostname
+    if (host && host !== 'localhost' && host !== '127.0.0.1') {
+      return `${window.location.protocol}//${host}:8000`
+    }
+  }
+  return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+}
 
-const client = axios.create({ baseURL: API_BASE_URL, timeout: 15000 })
+export const API_BASE_URL = getApiBaseUrl()
+
+const client = axios.create({ baseURL: API_BASE_URL, timeout: 30000 })
 
 // Every request automatically gets the active token matching current role, with graceful fallback
 client.interceptors.request.use((config) => {
@@ -145,6 +155,9 @@ export const api = {
 
   // Certificate Public Verification
   verifyCertificate: (certificateId) => client.get(`/api/public/verify-certificate/${encodeURIComponent(certificateId)}`),
+
+  // System Data Reset
+  purgeAllSystemData: () => client.post('/api/admin/system/purge-all-data'),
 }
 
 export const apiGet = async (url, config) => (await client.get(url, config)).data

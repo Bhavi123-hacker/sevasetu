@@ -84,10 +84,51 @@ export default function StaffGate({ children, requireRole = null }) {
             </button>
           </form>
 
-          <div className="pt-4 border-t border-[var(--color-border-subtle)] text-center">
-            <span className="text-xs text-[var(--color-ink-subtle)]">
-              Demo accounts: <code>officer1</code> / <code>admin1</code>
-            </span>
+          <div className="pt-3 border-t border-[var(--color-border-subtle)] space-y-2">
+            <div className="text-[11px] font-bold text-center text-[var(--color-ink-muted)]">Instant Quick Login:</div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  setLoading(true)
+                  setError(null)
+                  try {
+                    await login('officer1', 'seva123')
+                  } catch (e1) {
+                    try {
+                      await login('officer1', 'officer-demo-pass')
+                    } catch (e2) {
+                      setError('Officer login failed')
+                    }
+                  } finally {
+                    setLoading(false)
+                  }
+                }}
+                className="btn btn-secondary py-2 text-xs font-bold"
+              >
+                Officer (officer1)
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setLoading(true)
+                  setError(null)
+                  try {
+                    await login('admin1', 'admin-demo-pass')
+                  } catch (e) {
+                    setError('Admin login failed')
+                  } finally {
+                    setLoading(false)
+                  }
+                }}
+                className="btn btn-secondary py-2 text-xs font-bold"
+              >
+                Admin (admin1)
+              </button>
+            </div>
+            <div className="text-[10px] text-center text-[var(--color-ink-subtle)] pt-1">
+              Passwords: <code>seva123</code> / <code>officer-demo-pass</code> / <code>admin-demo-pass</code>
+            </div>
           </div>
         </div>
       </div>
